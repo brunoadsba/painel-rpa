@@ -66,10 +66,12 @@ Painel RPA/
 │   │
 │   └── backend/                Fastify + Drizzle
 │       ├── src/
-│       │   ├── db/             Schema (bots, executions, logs) + seed
+│       │   ├── db/             Schema (bots, executions, logs) + seed (1 bot)
 │       │   ├── routes/         auth, bots, execution
 │       │   ├── services/       openport (híbrido mock/real), executor (spawn Python)
 │       │   ├── middleware/     JWT verify
+│       ├── __tests__/          Testes E2E (11 testes, Vitest)
+│       ├── vitest.config.ts    Config Vitest
 │       │   └── lib/            JWT sign/verify
 │       └── data/               SQLite (gitignored)
 │
@@ -83,7 +85,7 @@ Painel RPA/
 │   ├── core/
 │   │   ├── logger.py           emit_log() → JSON stdout
 │   │   ├── models.py           Pydantic: BotConfig, LogEntry, ExecutionResult
-│   │   └── openport_client.py  Placeholder (httpx async)
+│   │   └── openport_client.py  Client HTTP funcional (lê OPENPORT_API_URL do env)
 │   ├── paralisacao/            ✅ RPA REAL (Playwright)
 │   │   ├── run.py              Entry point headless para backend
 │   │   ├── src/paralisacao/    14 módulos
@@ -106,7 +108,7 @@ Painel RPA/
 ├── .gitignore
 ├── biome.json                  Config do linter
 ├── package.json                npm workspaces root
-├── painel.md                   Documentação completa do monorepo (489 linhas)
+├── painel.md                   Documentação completa do monorepo (487 linhas)
 └── torre-rpa.html              Mockup original (legado)
 ```
 
@@ -194,7 +196,7 @@ deve ser substituído por chamada HTTP real à API do OpenPort.
 `apps/backend/src/services/executor.ts`:
 
 ```
-spawn(python, [scripts/<bot>/run.py, --bot-id, <uuid>, --openport-token, <token>])
+spawn(python, [scripts/<bot>/run.py, --bot-id, <uuid>, --openport-token, <token>, --triggered-by, <user>])
   ↓
 Cada linha do stdout é um JSON → persiste no SQLite + envia via SSE
   ↓
@@ -202,6 +204,8 @@ Script encerra → update execution (status: done/error)
 ```
 
 **⚠️ Guardião de concorrência:** um `Set<string>` (`runningBots`) impede que o mesmo bot seja executado duas vezes simultaneamente. A rota `POST /api/bots/:id/execute` retorna HTTP 409 se o bot já estiver rodando.
+
+**⚠️ Proteções adicionais:** Timeout configurável (`EXECUTION_TIMEOUT_MS`, padrão 30min); cliente SSE desconectado mata o processo filho; valida `scriptPath` antes de registrar execução.
 
 ### 5.4. Error handler global
 
@@ -323,7 +327,7 @@ interface ApiResponse<T> { success, data?, error? }
 |---------|-----------|
 | `logger.py` | `emit_log(level, message, execution_id)` → imprime JSON no stdout |
 | `models.py` | `BotConfig`, `LogEntry`, `ExecutionResult` (Pydantic) |
-| `openport_client.py` | Placeholder (httpx async, URL `https://api.openport.example.com`) |
+| `openport_client.py` | Client HTTP funcional (lê `OPENPORT_API_URL` do env, fallback mock, error handling) |
 
 ### 9.2. Único RPA atual: Paralisação
 
@@ -392,6 +396,7 @@ docker compose -f docker/docker-compose.yml up
 
 - `biome check` — lint + formatação
 - `tsc --noEmit` — typecheck em todos workspaces
+- `vitest run` — 11 testes E2E (apps/backend)
 
 ---
 
@@ -471,6 +476,9 @@ npm run dev:frontend  # Vite :5173
 ### Testes
 
 ```bash
+# Backend (11 testes E2E)
+npm run test -w apps/backend
+
 # Python (paralisacao)
 cd scripts/paralisacao
 $env:PYTHONPATH="src"; pytest

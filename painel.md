@@ -92,20 +92,22 @@ C:/Users/bruno.santos/Downloads/Projetos/Painel RPA/
 │       └── src/
 │           ├── server.ts                 # Bootstrap: CORS, routes, health, initDatabase()
 │           ├── db/
-│           │   ├── index.ts              # Conexão SQLite + auto-init (tabelas)
-│   │   ├── seed.ts               # Seed data (1 bot)
-│           │   └── schema.ts             # Schema Drizzle (bots, executions, logs)
-│           ├── routes/
-│           │   ├── auth.routes.ts        # POST /api/auth/openport
-│           │   ├── bots.routes.ts        # GET /api/bots, GET /api/bots/:id
-│           │   └── execution.routes.ts   # POST execute, GET stream (SSE)
-│           ├── services/
-│           │   ├── openport.ts           # Mock autenticação OpenPort
-│           │   └── executor.ts           # spawn Python, parse stdout, persiste logs
-│           ├── middleware/
-│           │   └── auth.ts               # JWT verify middleware
-│           └── lib/
-│               └── jwt.ts                # JWT sign/verify
+│   ├── __tests__/                # Testes E2E (11 testes, Vitest)
+│   ├── vitest.config.ts          # Config Vitest
+│   │   ├── index.ts              # Conexão SQLite + auto-init (tabelas)
+│   │   ├── seed.ts               # Seed data (1 bot: paralisacao)
+│   │   └── schema.ts             # Schema Drizzle (bots, executions, logs)
+│   ├── routes/
+│   │   ├── auth.routes.ts        # POST /api/auth/openport
+│   │   ├── bots.routes.ts        # GET /api/bots, GET /api/bots/:id
+│   │   └── execution.routes.ts   # POST execute, GET stream (SSE) + req.close kill
+│   ├── services/
+│   │   ├── openport.ts           # Híbrido mock/real (lê OPENPORT_API_URL)
+│   │   └── executor.ts           # spawn Python, timeout, .venv優先, kill handle
+│   ├── middleware/
+│   │   └── auth.ts               # JWT verify middleware
+│   └── lib/
+│       └── jwt.ts                # JWT sign/verify
 │
 ├── packages/
 │   └── shared/                           # Tipos TypeScript compartilhados
@@ -115,7 +117,7 @@ C:/Users/bruno.santos/Downloads/Projetos/Painel RPA/
 │           └── constants.ts              # STATUS_LABEL, STATUS_COLOR
 │
 ├── scripts/                              # RPAs em Python
-│   ├── requirements.txt                  # httpx, pydantic, loguru, python-dotenv
+│   ├── requirements.txt                  # httpx, pydantic, python-dotenv, playwright, openpyxl
 │   ├── .venv/                            # Python 3.12.10 virtualenv
 │   ├── __template__/                     # Template para novos RPAs
 │   │   └── run.py
@@ -123,7 +125,7 @@ C:/Users/bruno.santos/Downloads/Projetos/Painel RPA/
 │   │   ├── __init__.py
 │   │   ├── models.py                    # Pydantic models
 │   │   ├── logger.py                    # emit_log() → JSON stdout
-│   │   └── openport_client.py           # Async httpx client (placeholder)
+│   │   └── openport_client.py           # Client HTTP funcional (lê OPENPORT_API_URL do env)
 │   └── paralisacao/                     # RPA real (Playwright)
 │       └── run.py
 │
@@ -269,19 +271,23 @@ JWT secret: process.env.JWT_SECRET (padrão: 'change-me-in-production')
 
 ### 7.1. Scripts Python (RPA)
 
-Cada script em `scripts/<nome>/run.py` segue este padrão:
+Cada script em `scripts/<nome>/run.py` segue o padrão do template `scripts/__template__/run.py`:
 
 ```python
 import argparse
 from core.logger import emit_log
+from core.models import BotConfig
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--bot-id", required=True)
-parser.add_argument("--openport-token", required=True)  # NUNCA usado atualmente
+parser.add_argument("--openport-token", required=True)
+parser.add_argument("--triggered-by", default="")
 args = parser.parse_args()
 
-emit_log("info", "Autenticando no OpenPort...", args.bot_id)
-# TODO: chamar openport_client.authenticate() com args.openport_token
+config = BotConfig(bot_id=args.bot_id, name="Meu RPA", openport_token=args.openport_token)
+emit_log("info", "Iniciando...", config.bot_id)
+# from core.openport_client import fetch_data
+# data = fetch_data("/api/endpoint", config.openport_token)
 ```
 
 **Estado atual:** Apenas `paralisacao/` tem lógica real (Playwright). Novos RPAs seguem o template `scripts/__template__/run.py`.
@@ -293,15 +299,9 @@ Fase 2 (futura): Python vira microserviço FastAPI independente
                  Node.js vira API gateway
 ```
 
-### 7.2. OpenPort Client (placeholder)
+### 7.2. OpenPort Client (funcional)
 
-`scripts/core/openport_client.py`:
-
-```python
-BASE_URL = "https://api.openport.example.com"  # ← SUBSTITUIR
-```
-
-Estrutura correta (async httpx) mas URL é placeholder. Nenhum script a importa.
+`scripts/core/openport_client.py` lê `OPENPORT_API_URL` do ambiente real. Se não configurada, faz fallback para mock. Inclui error handling por tipo (HTTP, timeout, genérico).
 
 ### 7.3. OpenPort Auth (híbrido mock/real)
 
@@ -315,15 +315,13 @@ Comportamento atual:
 - Se `OPENPORT_API_URL` estiver definida e não contiver `example.com` → faz chamada HTTP real
 - Caso contrário → mantém mock (aceita qualquer credencial, retorna `'mock-openport-session-token'`)
 
-### 7.4. Token fallback
+### 7.4. Executor — melhorias de robustez
 
-`apps/backend/src/services/executor.ts:33`:
-
-```typescript
-token ?? 'mock-token',
-```
-
-Se nenhum token for passado, envia `'mock-token'` para o Python. Remover quando integração real estiver pronta.
+- **`findPython()`** — tenta `.venv/Scripts/python.exe` (Windows) primeiro, depois `python`, `py`, `python3`
+- **Validação de `scriptPath`** — verifica se o arquivo existe antes de registrar a execução no banco
+- **Timeout** — `EXECUTION_TIMEOUT_MS` (padrão 30min) mata o processo se estourar
+- **Kill no disconnect** — se o cliente SSE desconectar, o processo filho é morto
+- **Token fallback** — se nenhum token for passado, envia `'mock-token'` para o Python
 
 ### 7.5. Configuração ausente
 
@@ -375,8 +373,12 @@ npm run dev:frontend         # vite
 npm run lint                 # biome check --write .
 npm run typecheck            # tsc --noEmit em todos workspaces
 
+# Testes E2E backend (11 testes)
+npm run test -w apps/backend
+
 # Python
 scripts/.venv/Scripts/pip install -r scripts/requirements.txt
+scripts/.venv/Scripts/playwright install chromium   # primeira vez apenas
 scripts/.venv/Scripts/python scripts/<bot>/run.py --bot-id x --openport-token y
 ```
 

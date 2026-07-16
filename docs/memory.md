@@ -40,12 +40,14 @@ torre-rpa/
 │   │   │   └── styles/        # globals.css (Tailwind directives)
 │   │   └── ...
 │   └── backend/           Fastify + TypeScript
+│       ├── __tests__/        # Testes E2E (11 testes, Vitest)
 │       ├── src/
-│       │   ├── db/            # Schema Drizzle + conexão SQLite
+│       │   ├── db/            # Schema Drizzle + conexão SQLite + seed
 │       │   ├── routes/        # auth, bots, execution
-│       │   ├── services/      # openport, executor
+│       │   ├── services/      # openport (híbrido), executor (spawn Python)
 │       │   ├── middleware/    # auth
 │       │   └── lib/           # jwt
+│       ├── vitest.config.ts   # Config Vitest
 │       ├── data/              # SQLite (dev), gitignored
 │       └── ...
 ├── packages/
@@ -53,7 +55,7 @@ torre-rpa/
 ├── scripts/               RPAs em Python
 │   ├── .venv/             Python 3.12.10 isolado
 │   ├── __template__/      Template para novos RPAs (run.py)
-│   ├── core/              Módulo compartilhado (openport_client, logger, models)
+│   ├── core/              Módulo compartilhado (openport_client funcional, logger, models)
 │   └── paralisacao/       RPA real (Playwright, 14 módulos)
 ├── docker/
 │   ├── docker-compose.yml  # postgres + backend + frontend
@@ -165,9 +167,9 @@ scripts/.venv/Scripts/python scripts/<bot>/run.py --bot-id x --openport-token y
 ### Adicionar novo RPA
 
 1. Copiar `scripts/__template__/` → `scripts/meu-rpa/`
-2. Implementar a lógica em `run()`
+2. Implementar a lógica em `run()` usando `core.logger` e `core.openport_client`
 3. Adicionar ao `apps/backend/src/db/seed.ts`
-4. Executar testes: `npm run test -w apps/backend`
+4. Executar: `npm run test -w apps/backend && npm run lint && npm run typecheck`
 
 ## Próximos Passos (projetados)
 

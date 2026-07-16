@@ -14,14 +14,14 @@ Painel web para centralizar, autenticar e executar automações RPA do Porto de 
 | Frontend | Backend | Scripts |
 |---|---|---|
 | React 19 + Vite | Fastify 5 + TS | Python 3.12 |
-| Tailwind CSS 3 | Zod + JWT | httpx + loguru · Playwright |
+| Tailwind CSS 3 | Zod + JWT | Playwright + httpx |
 | TanStack Query | SSE em tempo real | Pydantic |
 | Zustand | child_process → Python | .venv isolado |
 
 ## Rápido início
 
 ```bash
-# (Todos os comandos devem ser executados na RAIZ do projeto)
+# (Todos os comandos na RAIZ do projeto)
 
 # 1. Instalar dependências Node.js
 npm install --registry https://registry.npmmirror.com
@@ -35,11 +35,17 @@ playwright install chromium
 
 # 4. Configurar credenciais
 cp .env.example .env
-cp scripts\paralisacao\.env.example scripts\paralisacao\.env
+copy scripts\paralisacao\.env.example scripts\paralisacao\.env
+# Editar .env com credenciais reais
 
 # 5. Dev — dois terminais (um para cada)
 npm run dev:backend   # Backend :3001
 npm run dev:frontend  # Frontend :5173
+
+# 6. Testes
+npm run test -w apps/backend   # 11 testes E2E
+npm run lint                   # Biome
+npm run typecheck              # TypeScript
 ```
 
 ## Estrutura
@@ -47,15 +53,13 @@ npm run dev:frontend  # Frontend :5173
 ```
 apps/
 ├── frontend/     React + Vite
-└── backend/      Fastify + TS
+└── backend/      Fastify + TS + Vitest
 packages/
 └── shared/       Tipos compartilhados
 scripts/
-├── core/                Código Python compartilhado (logger, models)
-├── paralisacao/         ✅ RPA real — registro de paralisações no OpenPort
-├── openport-relatorio/  ⏳ Mock
-├── movimentacao-diaria/ ⏳ Mock
-└── ...                  (6 automações no total)
+├── core/                Código Python compartilhado (logger, models, openport_client)
+├── __template__/        Template para novos RPAs
+└── paralisacao/         ✅ RPA real — registro de paralisações no OpenPort
 ```
 
 ## API
