@@ -1,0 +1,27 @@
+node_modules/
+dist/
+.turbo/
+*.log
+.env
+.env.local
+*.tsbuildinfo
+
+# Python – geral
+__pycache__/
+*.pyc
+.coverage
+.pytest_cache/
+.ruff_cache/
+
+# Python – scripts (RPAs)
+scripts/.venv/
+scripts/*/__pycache__/
+scripts/core/__pycache__/
+scripts/**/relatorios/
+scripts/**/logs/
+scripts/**/screenshots/
+scripts/**/data/status.json
+
+# Node
+apps/backend/data/
+apps/backend/drizzle/

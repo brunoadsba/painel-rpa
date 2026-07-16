@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    @apply bg-navy-950 text-white min-h-screen;
+    font-family: "Inter", sans-serif;
+    background-image: radial-gradient(circle at 12% -10%, rgba(58, 166, 166, 0.1), transparent 42%),
+      radial-gradient(circle at 90% 0%, rgba(0, 24, 88, 0.55), transparent 45%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

@@ -1,0 +1,1 @@
+Palette extraída da logo: azul-marinho institucional `#001858` (dominante) e um teal/ciano de apoio `#3AA6A6`. Vou reconstruir o painel com essa paleta e a logo real no header.Agora vou reconstruir o arquivo com a paleta institucional (navy `#001858` + teal `#3AA6A6`) e a logo real embutida.
