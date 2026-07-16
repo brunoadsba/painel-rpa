@@ -94,13 +94,34 @@ O RPA de paralisação é complexo (14 módulos, Playwright). Em vez de um
 
 ## 5. RPA de Paralisação (o único real)
 
-### 5.1. O que faz
+### 5.1. O que é "paralisação" no contexto do Porto
+
+Quando um navio está atracado carregando ou descarregando carga, a operação
+pode ser **interrompida temporariamente** por diversos motivos:
+
+| Motivo | Exemplo |
+|--------|---------|
+| Segurança | DDS (Diálogo Diário de Segurança) — pausa obrigatória para briefings |
+| Clima | Chuva forte que impede a operação |
+| Mecânico | Defeito em equipamento (esteira, guindaste) |
+| Operacional | Troca de turno, descanso da equipe, aguardando caminhão |
+| Burocrático | Visita da ANVISA, documentação, vistoria |
+
+Cada uma dessas interrupções é uma **paralisação** — um período com hora de
+início e fim que precisa ser registrado no sistema OpenPort para controle
+de estadia do navio, produtividade do terminal e faturamento.
+
+**Hoje isso é feito manualmente:** um operador abre o OpenPort, procura a
+capa do navio, preenche motivo, horários e observação para cada paralisação.
+O RPA automatiza esse processo.
+
+### 5.2. O que o RPA faz
 
 Lê uma planilha Excel (.xlsx) com paralisações de navio, abre o sistema
 OpenPort CODEBA via Playwright, busca ou cria a capa correta e registra cada
 paralisação (motivo, horário, observações) com checagem anti-duplicata.
 
-### 5.2. Estrutura
+### 5.3. Estrutura
 
 ```
 scripts/paralisacao/
@@ -125,7 +146,7 @@ scripts/paralisacao/
 └── docs/                     Guia operacional
 ```
 
-### 5.3. Pontos de atenção
+### 5.4. Pontos de atenção
 
 - Usa **Playwright** — depende de `playwright install chromium`
 - `config.py` resolve `project_root` via env var `PARALISACAO_ROOT`
