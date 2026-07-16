@@ -22,6 +22,10 @@ sys.path.insert(0, str(PARALISACAO_SRC))   # for from paralisacao.main import ..
 
 os.environ["PARALISACAO_ROOT"] = str(PARALISACAO_DIR)
 
+# Force headless mode for backend execution (overrides .env)
+os.environ["HEADLESS"] = "true"
+os.environ["PRIMEIRO_PLANO"] = "false"
+
 # --- Parse backend arguments ----------------------------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument("--bot-id", required=True)
@@ -59,9 +63,7 @@ from paralisacao import status
 
 config = Config.from_env(dotenv_path=str(PARALISACAO_DIR / ".env"))
 
-planilha_path = config.planilha
-if not Path(planilha_path).is_absolute():
-    planilha_path = str(PARALISACAO_DIR / planilha_path)
+planilha_path = str(PARALISACAO_DIR / config.planilha)
 
 if not Path(planilha_path).exists():
     logging.error(f"Planilha nao encontrada: {planilha_path}")

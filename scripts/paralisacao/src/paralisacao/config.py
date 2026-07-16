@@ -97,7 +97,7 @@ class Config:
             pausa_visual_ms=int(os.getenv("PAUSA_VISUAL_MS", "800" if primeiro_plano else "0")),
             manter_aberto_seg=int(os.getenv("MANTER_ABERTO_SEG", "600")),
             estadia_label=os.getenv("ESTADIA_LABEL", "").strip(),
-            operador="30002",
+            operador=os.getenv("OPERADOR", "30002"),
             project_root=project_root,
             css=css,
             motivo_correspondencia=motivo_correspondencia,
