@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { db } from '../db/index.js';
 import { bots } from '../db/schema.js';
 import { type AuthenticatedRequest, authMiddleware } from '../middleware/auth.js';
-import { executeBot } from '../services/executor.js';
+import { executeBot, isBotRunning } from '../services/executor.js';
 
 export async function executionRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>(
@@ -14,6 +14,12 @@ export async function executionRoutes(app: FastifyInstance) {
       const bot = db.select().from(bots).where(eq(bots.id, request.params.id)).get();
       if (!bot) {
         return reply.status(404).send({ success: false, error: 'Bot não encontrado' });
+      }
+      if (isBotRunning(bot.id)) {
+        return reply.status(409).send({
+          success: false,
+          error: `"${bot.name}" já está em execução.`,
+        });
       }
       return reply.send({
         success: true,
@@ -41,22 +47,35 @@ export async function executionRoutes(app: FastifyInstance) {
       });
 
       const sendEvent = (entry: LogEntry) => {
-        reply.raw.write(`data: ${JSON.stringify(entry)}\n\n`);
+        try {
+          reply.raw.write(`data: ${JSON.stringify(entry)}\n\n`);
+        } catch {}
       };
 
+      let killProcess: (() => void) | null = null;
+
+      const onClose = () => {
+        killProcess?.();
+      };
+      request.raw.on('close', onClose);
+
       try {
-        const executionId = await executeBot(
+        const result = executeBot(
           bot,
           sendEvent,
           (userSession?.session as string) ?? '',
           (userSession?.sub as string) ?? '',
         );
+        killProcess = result.kill;
+
+        const executionId = await result.promise;
 
         reply.raw.write(`event: done\ndata: ${JSON.stringify({ executionId })}\n\n`);
       } catch (err) {
-        reply.raw.write(
-          `event: error\ndata: ${JSON.stringify({ error: (err as Error).message })}\n\n`,
-        );
+        const message = err instanceof Error ? err.message : 'Erro desconhecido';
+        reply.raw.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`);
+      } finally {
+        request.raw.removeListener('close', onClose);
       }
 
       reply.raw.end();

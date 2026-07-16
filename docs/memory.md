@@ -52,13 +52,9 @@ torre-rpa/
 │   └── shared/            Tipos compartilhados (Bot, LogEntry, AuthCredentials…)
 ├── scripts/               RPAs em Python
 │   ├── .venv/             Python 3.12.10 isolado
+│   ├── __template__/      Template para novos RPAs (run.py)
 │   ├── core/              Módulo compartilhado (openport_client, logger, models)
-│   ├── openport-relatorio/main.py
-│   ├── movimentacao-diaria/main.py
-│   ├── fechamento-tos/main.py
-│   ├── manifesto-carga/main.py
-│   ├── consolidacao-atracacao/main.py
-│   └── boletim-diretoria/main.py
+│   └── paralisacao/       RPA real (Playwright, 14 módulos)
 ├── docker/
 │   ├── docker-compose.yml  # postgres + backend + frontend
 │   ├── Dockerfile.backend
@@ -87,9 +83,24 @@ torre-rpa/
 ### Banco de Dados
 - **SQLite** em desenvolvimento (`data/torre-rpa.db`), **PostgreSQL** em produção.
 - Drizzle ORM com schema type-safe. Tabelas: `bots`, `executions`, `logs`.
-- Auto-init na inicialização do servidor: cria tabelas + seed com 6 bots.
+- Auto-init na inicialização do servidor: cria tabelas + seed com 1 bot (`paralisacao`).
+- Seed data isolado em `db/seed.ts` (não mais inline no `index.ts`).
 - Migrações futuras via `drizzle-kit generate` + `drizzle-kit migrate`.
 - Persistência de execuções e logs em tempo real (cada log do Python é salvo no banco).
+
+### Execução concorrente
+- `executor.ts` mantém um `Set<string>` de bots em execução (`runningBots`).
+- `POST /api/bots/:id/execute` verifica se o bot já está rodando → retorna HTTP 409 se sim.
+- Ao finalizar (done/error), o bot é removido do set automaticamente.
+
+### Tratamento de erros
+- Fastify `setErrorHandler` global em `server.ts` captura exceções não tratadas.
+- Respostas seguem o formato `{ success: false, error: string }`.
+
+### OpenPort (autenticação híbrida)
+- `openport.ts` lê `OPENPORT_API_URL` do ambiente.
+- Se a URL estiver configurada e não for `example.com`, faz chamada HTTP real.
+- Caso contrário, mantém comportamento mock (aceita qualquer credencial).
 
 ### Monorepo npm workspaces
 - `packages/shared` — tipos TypeScript compartilhados entre frontend e backend
@@ -103,7 +114,7 @@ torre-rpa/
 | `GET` | `/api/health` | Não | Health check |
 | `GET` | `/api/bots` | Não | Lista automações (público) |
 | `GET` | `/api/bots/:id` | Bearer JWT | Detalhes de um bot |
-| `POST` | `/api/bots/:id/execute` | Bearer JWT | Dispara execução |
+| `POST` | `/api/bots/:id/execute` | Bearer JWT | Dispara execução (409 se já rodando) |
 | `GET` | `/api/bots/:id/stream` | Bearer JWT | SSE — logs ao vivo |
 
 ## Fluxo de Execução
@@ -111,7 +122,7 @@ torre-rpa/
 1. Usuário clica "Executar" no bot
 2. Modal pede login/senha do OpenPort
 3. `POST /api/auth/openport` — retorna JWT
-4. `GET /api/bots/:id/stream` — backend cria registro de execução no banco e spawna `python scripts/<bot>/main.py`
+4. `GET /api/bots/:id/stream` — backend verifica se bot já está rodando, cria registro de execução no banco e spawna `python scripts/<bot>/run.py`
 5. Python emite `{"level":"info","message":"..."}` no stdout
 6. Node.js captura cada linha, persiste no banco e envia como `data: {…}\n\n` via SSE
 7. LogDrawer no frontend renderiza cada entrada em tempo real
@@ -134,6 +145,11 @@ torre-rpa/
 npm run dev:backend   # Fastify :3001
 npm run dev:frontend  # Vite :5173 (proxy /api → :3001)
 
+# Testes
+npm run test -w apps/backend   # 11 testes E2E
+npm run lint                   # Biome
+npm run typecheck              # tsc --noEmit
+
 # Build produção
 npm run build
 docker compose -f docker/docker-compose.yml up
@@ -143,13 +159,21 @@ docker compose -f docker/docker-compose.yml up
 
 ```bash
 scripts/.venv/Scripts/pip install -r scripts/requirements.txt
-scripts/.venv/Scripts/python scripts/<bot>/main.py --bot-id x --openport-token y
+scripts/.venv/Scripts/python scripts/<bot>/run.py --bot-id x --openport-token y
 ```
+
+### Adicionar novo RPA
+
+1. Copiar `scripts/__template__/` → `scripts/meu-rpa/`
+2. Implementar a lógica em `run()`
+3. Adicionar ao `apps/backend/src/db/seed.ts`
+4. Executar testes: `npm run test -w apps/backend`
 
 ## Próximos Passos (projetados)
 
-1. **Histórico** — Página de histórico de execuções com filtros (dados já estão no banco)
-2. **Integração OpenPort real** — Substituir mock `openport.ts` e `openport_client.py` por chamadas reais
-3. **Migrar SQLite → PostgreSQL** — Trocar driver Drizzle e rodar migrations
-4. **Agentes de IA** — Evoluir scripts Python para agentes com langchain/crewai
-5. **Microserviço Python** — Extrair `scripts/` para FastAPI independente
+1. **Novos RPAs** — Adicionar automações reais seguindo o padrão `scripts/__template__/run.py`
+2. **Histórico** — Página de histórico de execuções com filtros (dados já estão no banco)
+3. **Integração OpenPort real** — Substituir mock `openport.ts` e `openport_client.py` por chamadas reais
+4. **Migrar SQLite → PostgreSQL** — Trocar driver Drizzle e rodar migrations
+5. **Agentes de IA** — Evoluir scripts Python para agentes com langchain/crewai
+6. **Microserviço Python** — Extrair `scripts/` para FastAPI independente

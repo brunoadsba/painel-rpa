@@ -24,9 +24,8 @@ clica em "Executar" e acompanha os logs em tempo real.
 | Status | O quê |
 |--------|-------|
 | ✅ Pronto | RPA de Paralisação (real, com Playwright) |
-| ⏳ Mock | 6 RPAs simulados (esqueleto com `time.sleep` + `emit_log`) |
 | 🔧 Arquitetura | Monorepo Node.js + Python híbrido |
-| 🚀 Futuro | Substituir mocks por implementações reais |
+| 🚀 Próximo | Adicionar novos RPAs seguindo template `__template__/run.py` |
 
 ---
 
@@ -69,7 +68,7 @@ Painel RPA/
 │       ├── src/
 │       │   ├── db/             Schema (bots, executions, logs) + seed
 │       │   ├── routes/         auth, bots, execution
-│       │   ├── services/       openport (mock), executor (spawn Python)
+│       │   ├── services/       openport (híbrido mock/real), executor (spawn Python)
 │       │   ├── middleware/     JWT verify
 │       │   └── lib/            JWT sign/verify
 │       └── data/               SQLite (gitignored)
@@ -91,12 +90,7 @@ Painel RPA/
 │   │   ├── tests/              30 testes (pytest, 83% coverage)
 │   │   ├── data/               Planilha, lookup de motivos
 │   │   └── docs/               Guia operacional
-│   ├── openport-relatorio/     ⏳ Mock
-│   ├── movimentacao-diaria/    ⏳ Mock
-│   ├── fechamento-tos/         ⏳ Mock
-│   ├── manifesto-carga/        ⏳ Mock
-│   ├── consolidacao-atracacao/ ⏳ Mock
-│   └── boletim-diretoria/      ⏳ Mock
+│   └── __template__/           Template para novos RPAs
 │
 ├── docker/
 │   ├── docker-compose.yml      postgres + backend + frontend
@@ -151,7 +145,7 @@ src/
 
 ### 4.2. Fluxo da tela principal
 
-1. Ao carregar, `use-bots` busca `GET /api/bots` → tabela com 7 bots
+1. Ao carregar, `use-bots` busca `GET /api/bots` → tabela com bots cadastrados
 2. Usuário clica "Executar" → `auth-modal` abre pedindo login/senha
 3. Usuário preenche → `POST /api/auth/openport` → recebe JWT
 4. Frontend conecta SSE em `GET /api/bots/:id/stream` com JWT
@@ -207,6 +201,18 @@ Cada linha do stdout é um JSON → persiste no SQLite + envia via SSE
 Script encerra → update execution (status: done/error)
 ```
 
+**⚠️ Guardião de concorrência:** um `Set<string>` (`runningBots`) impede que o mesmo bot seja executado duas vezes simultaneamente. A rota `POST /api/bots/:id/execute` retorna HTTP 409 se o bot já estiver rodando.
+
+### 5.4. Error handler global
+
+`server.ts` registra `setErrorHandler` no Fastify que captura qualquer exceção não tratada e retorna `{ success: false, error: "mensagem" }` com o código HTTP apropriado.
+
+### 5.5. OpenPort híbrido (mock/real)
+
+`services/openport.ts` lê `OPENPORT_API_URL` do ambiente:
+- Se configurada com URL real (diferente de `example.com`): faz chamada HTTP
+- Caso contrário: mantém o mock (aceita qualquer credencial)
+
 ### 5.4. Middleware
 
 - `auth.ts`: verifica JWT no header `Authorization: Bearer <token>`
@@ -253,17 +259,13 @@ Script encerra → update execution (status: done/error)
 
 ### 6.2. Seed (inicialização automática)
 
-Ao iniciar o backend, se a tabela `bots` estiver vazia, insere 7 bots:
+Ao iniciar o backend, se a tabela `bots` estiver vazia, insere 1 bot:
 
 | id | Nome | Status | Real? |
 |----|------|--------|-------|
 | `paralisacao` | Paralisação | `idle` | ✅ Real |
-| `openport-relatorio` | OpenPort Relatório | `done` | ⏳ Mock |
-| `movimentacao-diaria` | Movimentação Diária | `done` | ⏳ Mock |
-| `fechamento-tos` | Fechamento TOS | `idle` | ⏳ Mock |
-| `manifesto-carga` | Extração de Manifesto | `idle` | ⏳ Mock |
-| `consolidacao-atracacao` | Consolidação de Atracação | `error` | ⏳ Mock |
-| `boletim-diretoria` | Boletim para Diretoria | `idle` | ⏳ Mock |
+
+> **Nota:** Novos RPAs devem ser adicionados no array `SEED_BOTS` em `apps/backend/src/db/seed.ts`.
 
 ---
 
@@ -282,8 +284,7 @@ Ao iniciar o backend, se a tabela `bots` estiver vazia, insere 7 bots:
 ```json
 // Response
 { "success": true, "data": [
-  { "id": "paralisacao", "name": "Paralisação", "status": "idle", ... },
-  { "id": "openport-relatorio", "name": "OpenPort Relatório", "status": "done", ... }
+  { "id": "paralisacao", "name": "Paralisação", "status": "idle", ... }
 ]}
 ```
 
@@ -324,19 +325,13 @@ interface ApiResponse<T> { success, data?, error? }
 | `models.py` | `BotConfig`, `LogEntry`, `ExecutionResult` (Pydantic) |
 | `openport_client.py` | Placeholder (httpx async, URL `https://api.openport.example.com`) |
 
-### 9.2. Mock vs Real
-
-**Mocks** (`scripts/*/main.py`):
-```python
-emit_log("info", "Autenticando...", args.bot_id)
-time.sleep(0.5)
-emit_log("success", "Autenticado!", args.bot_id)
-# Apenas simula passos com sleep + emit_log
-```
+### 9.2. Único RPA atual: Paralisação
 
 **Real** (`scripts/paralisacao/`):
 Usa Playwright para abrir o navegador, logar no OpenPort, navegar pelas
 telas e registrar paralisações automaticamente. 14 módulos, 30 testes.
+
+> **Nota:** Novos RPAs seguem o template em `scripts/__template__/run.py` e são registrados no seed.
 
 ### 9.3. Como a paralisação funciona (domínio)
 
@@ -428,7 +423,7 @@ emit_log("success", "Concluído!", config.bot_id)
 
 ### 12.2. Registrar no banco
 
-Adicionar no array `SEED_BOTS` em `apps/backend/src/db/index.ts`:
+Adicionar no array `SEED_BOTS` em `apps/backend/src/db/seed.ts`:
 
 ```typescript
 {
@@ -507,6 +502,7 @@ npm run typecheck
 | `docs/guia-operacional.md` | Guia detalhado do RPA de paralisação |
 | `scripts/paralisacao/run.py` | Entry point da paralisação |
 | `apps/backend/src/services/executor.ts` | Spawn do Python + SSE |
-| `apps/backend/src/db/index.ts` | Schema + seed do banco |
+| `apps/backend/src/db/seed.ts` | Seed data (1 bot) |
+| `apps/backend/src/db/index.ts` | Conexão SQLite + init |
 | `packages/shared/src/types.ts` | Tipos TypeScript |
 | `scripts/core/logger.py` | Logger Python |

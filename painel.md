@@ -92,7 +92,8 @@ C:/Users/bruno.santos/Downloads/Projetos/Painel RPA/
 │       └── src/
 │           ├── server.ts                 # Bootstrap: CORS, routes, health, initDatabase()
 │           ├── db/
-│           │   ├── index.ts              # Conexão SQLite + auto-init (tabelas + seed)
+│           │   ├── index.ts              # Conexão SQLite + auto-init (tabelas)
+│   │   ├── seed.ts               # Seed data (1 bot)
 │           │   └── schema.ts             # Schema Drizzle (bots, executions, logs)
 │           ├── routes/
 │           │   ├── auth.routes.ts        # POST /api/auth/openport
@@ -116,23 +117,15 @@ C:/Users/bruno.santos/Downloads/Projetos/Painel RPA/
 ├── scripts/                              # RPAs em Python
 │   ├── requirements.txt                  # httpx, pydantic, loguru, python-dotenv
 │   ├── .venv/                            # Python 3.12.10 virtualenv
-│   └── core/
+│   ├── __template__/                     # Template para novos RPAs
+│   │   └── run.py
+│   ├── core/
 │   │   ├── __init__.py
 │   │   ├── models.py                    # Pydantic models
 │   │   ├── logger.py                    # emit_log() → JSON stdout
 │   │   └── openport_client.py           # Async httpx client (placeholder)
-│   ├── openport-relatorio/
-│   │   └── main.py                      # 7 steps simulados
-│   ├── movimentacao-diaria/
-│   │   └── main.py                      # 5 steps simulados
-│   ├── fechamento-tos/
-│   │   └── main.py                      # 5 steps simulados
-│   ├── manifesto-carga/
-│   │   └── main.py                      # 4 steps simulados
-│   ├── consolidacao-atracacao/
-│   │   └── main.py                      # 5 steps simulados
-│   └── boletim-diretoria/
-│       └── main.py                      # 5 steps simulados
+│   └── paralisacao/                     # RPA real (Playwright)
+│       └── run.py
 │
 ├── docker/
 │   ├── docker-compose.yml               # postgres + backend + frontend
@@ -151,7 +144,7 @@ C:/Users/bruno.santos/Downloads/Projetos/Painel RPA/
 
 | Coluna | Tipo | Descrição |
 |--------|------|-----------|
-| `id` | TEXT PK | Slug único (ex: `openport-relatorio`) |
+| `id` | TEXT PK | Slug único (ex: `paralisacao`) |
 | `name` | TEXT | Nome legível |
 | `description` | TEXT | Descrição funcional |
 | `status` | TEXT | `idle` / `running` / `done` / `error` |
@@ -242,13 +235,15 @@ JWT secret: process.env.JWT_SECRET (padrão: 'change-me-in-production')
     │                            │  { token: JWT }              │                              │
     │                            │◄─────────────────────────────│                              │
     │                            │                              │                              │
-    │                            │  GET /api/bots/:id/stream    │                              │
-    │                            │  (Authorization: Bearer JWT) │                              │
-    │                            │ ────────────────────────────►│                              │
-    │                            │                              │  cria execution no banco     │
-    │                            │                              │  (status: running)           │
-    │                            │                              │                              │
-    │                            │  SSE: data: {...}            │  spawn (python main.py)      │
+│                            │  GET /api/bots/:id/stream    │                              │
+│                            │  (Authorization: Bearer JWT) │                              │
+│                            │ ────────────────────────────►│                              │
+│                            │                              │  verifica runningBots set    │
+│                            │                              │  (409 se já estiver rodando) │
+│                            │                              │  cria execution no banco     │
+│                            │                              │  (status: running)           │
+│                            │                              │                              │
+│                            │  SSE: data: {...}            │  spawn (python run.py)       │
     │                            │◄─────────────────────────────│ ────────────────────────────►│
     │                            │                              │                              │
     │                            │  renderiza logs no LogDrawer │  stdout JSON lines:          │
@@ -274,7 +269,7 @@ JWT secret: process.env.JWT_SECRET (padrão: 'change-me-in-production')
 
 ### 7.1. Scripts Python (RPA)
 
-Cada script em `scripts/<nome>/main.py` segue este padrão:
+Cada script em `scripts/<nome>/run.py` segue este padrão:
 
 ```python
 import argparse
@@ -289,7 +284,7 @@ emit_log("info", "Autenticando no OpenPort...", args.bot_id)
 # TODO: chamar openport_client.authenticate() com args.openport_token
 ```
 
-**Estado atual:** Todos os 6 scripts são simulações com `time.sleep()` + `emit_log()`. Nenhum chama `openport_client.py`. Nenhum executa lógica real de negócio.
+**Estado atual:** Apenas `paralisacao/` tem lógica real (Playwright). Novos RPAs seguem o template `scripts/__template__/run.py`.
 
 **Arquitetura de transição prevista:**
 ```
@@ -308,15 +303,17 @@ BASE_URL = "https://api.openport.example.com"  # ← SUBSTITUIR
 
 Estrutura correta (async httpx) mas URL é placeholder. Nenhum script a importa.
 
-### 7.3. OpenPort Auth (mock)
+### 7.3. OpenPort Auth (híbrido mock/real)
 
 `apps/backend/src/services/openport.ts`:
 
 ```typescript
-const MOCK_SESSION = 'mock-openport-session-token';  // ← SUBSTITUIR por chamada HTTP real
+const API_URL = process.env.OPENPORT_API_URL;  // Se configurado, usa HTTP real
 ```
 
-Aceita qualquer username/password. Deve ser substituído por chamada real à API OpenPort.
+Comportamento atual:
+- Se `OPENPORT_API_URL` estiver definida e não contiver `example.com` → faz chamada HTTP real
+- Caso contrário → mantém mock (aceita qualquer credencial, retorna `'mock-openport-session-token'`)
 
 ### 7.4. Token fallback
 
@@ -332,7 +329,7 @@ Se nenhum token for passado, envia `'mock-token'` para o Python. Remover quando 
 
 | Variável | Onde | Status |
 |----------|------|--------|
-| `OPENPORT_API_URL` | `.env.example` | Definido mas NUNCA lido por código algum |
+| `OPENPORT_API_URL` | `.env.example` | Lido por `openport.ts` — se real, faz chamada HTTP; se não, mock |
 | `JWT_SECRET` | `.env.example` | Lido em `lib/jwt.ts` |
 | `DATABASE_URL` | `.env.example` | PostgreSQL (não usado — SQLite atual) |
 | `.env` | Raiz | NÃO EXISTE (copiar de `.env.example`) |
@@ -353,7 +350,7 @@ Backend Node.js (Fastify :3001)
     │ stdout: JSON lines
     │
     ▼
-Python Script (scripts/<bot>/main.py)
+Python Script (scripts/<bot>/run.py)
     │
     │ httpx (futuro)
     │
@@ -380,7 +377,7 @@ npm run typecheck            # tsc --noEmit em todos workspaces
 
 # Python
 scripts/.venv/Scripts/pip install -r scripts/requirements.txt
-scripts/.venv/Scripts/python scripts/<bot>/main.py --bot-id x --openport-token y
+scripts/.venv/Scripts/python scripts/<bot>/run.py --bot-id x --openport-token y
 ```
 
 **Nota sobre npm registry:** O registry `https://registry.npmjs.org` retorna 403 nesta máquina. Usar `--registry https://registry.npmmirror.com` para instalar pacotes.
@@ -405,11 +402,12 @@ docker compose -f docker/docker-compose.yml up
 
 ## 11. Próximos Passos (roteiro)
 
-1. **Navegação:** Adicionar rota `/historico` com tabela de execuções passadas (dados já no banco)
-2. **OpenPort real:** Substituir mock `openport.ts` por chamada HTTP real + conectar `openport_client.py` nos scripts Python
-3. **PostgreSQL:** Trocar driver Drizzle (SQLite → pg), rodar migrations
-4. **Agentes IA:** Evoluir scripts Python com langchain/crewai
-5. **Microserviço Python:** Extrair scripts para FastAPI independente
+1. **Novos RPAs reais:** Adicionar automações seguindo `scripts/__template__/run.py`
+2. **Navegação:** Adicionar rota `/historico` com tabela de execuções passadas (dados já no banco)
+3. **OpenPort real:** Substituir mock `openport.ts` por chamada HTTP real + conectar `openport_client.py` nos scripts Python
+4. **PostgreSQL:** Trocar driver Drizzle (SQLite → pg), rodar migrations
+5. **Agentes IA:** Evoluir scripts Python com langchain/crewai
+6. **Microserviço Python:** Extrair scripts para FastAPI independente
 
 ---
 

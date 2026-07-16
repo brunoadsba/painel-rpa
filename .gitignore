@@ -21,6 +21,7 @@ scripts/**/relatorios/
 scripts/**/logs/
 scripts/**/screenshots/
 scripts/**/data/status.json
+scripts/**/output/
 
 # Node
 apps/backend/data/

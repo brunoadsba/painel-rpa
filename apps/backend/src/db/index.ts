@@ -4,9 +4,10 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema.js';
 import { bots } from './schema.js';
+import { SEED_BOTS } from './seed.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = join(__dirname, '..', '..', 'data', 'torre-rpa.db');
+const DB_PATH = process.env.DATABASE_PATH || join(__dirname, '..', '..', 'data', 'torre-rpa.db');
 
 const sqlite = new Database(DB_PATH);
 sqlite.pragma('journal_mode = WAL');
@@ -47,67 +48,8 @@ export function initDatabase() {
   const row = sqlite.prepare('SELECT COUNT(*) AS count FROM bots').get() as { count: number };
   if (!row || row.count === 0) {
     db.insert(bots).values(SEED_BOTS).run();
-    console.log('[DB] Seed inserido: 7 bots');
+    console.log(`[DB] Seed inserido: ${SEED_BOTS.length} bots`);
   } else {
     console.log('[DB] Banco já possui dados. Seed ignorado.');
   }
 }
-
-const SEED_BOTS = [
-  {
-    id: 'paralisacao',
-    name: 'Paralisação',
-    description: 'Registra paralisações de navio no OpenPort a partir de planilha .xlsx',
-    status: 'idle' as const,
-    lastRun: null,
-    scriptPath: 'paralisacao/run.py',
-  },
-  {
-    id: 'openport-relatorio',
-    name: 'OpenPort Relatório',
-    description: 'Escalas de navio, ocupação de berço e volume por agência',
-    status: 'done' as const,
-    lastRun: '2026-07-16T06:12:00.000Z',
-    scriptPath: 'openport-relatorio/main.py',
-  },
-  {
-    id: 'movimentacao-diaria',
-    name: 'Movimentação Diária',
-    description: 'Consolida planilha de movimentação e gera dashboard executivo',
-    status: 'done' as const,
-    lastRun: '2026-07-16T05:47:00.000Z',
-    scriptPath: 'movimentacao-diaria/main.py',
-  },
-  {
-    id: 'fechamento-tos',
-    name: 'Fechamento TOS',
-    description: 'Extrai fechamento diário do sistema TOS/Openport',
-    status: 'idle' as const,
-    lastRun: '2026-07-15T22:03:00.000Z',
-    scriptPath: 'fechamento-tos/main.py',
-  },
-  {
-    id: 'manifesto-carga',
-    name: 'Extração de Manifesto',
-    description: 'Baixa e organiza manifestos de carga do dia',
-    status: 'idle' as const,
-    lastRun: '2026-07-15T18:30:00.000Z',
-    scriptPath: 'manifesto-carga/main.py',
-  },
-  {
-    id: 'consolidacao-atracacao',
-    name: 'Consolidação de Atracação',
-    description: 'Reúne dados de atracação para o boletim diário',
-    status: 'error' as const,
-    lastRun: '2026-07-14T22:15:00.000Z',
-    scriptPath: 'consolidacao-atracacao/main.py',
-  },
-  {
-    id: 'boletim-diretoria',
-    name: 'Boletim para Diretoria',
-    description: 'Compila indicadores-chave em PDF para envio matinal',
-    status: 'idle' as const,
-    lastRun: '2026-07-14T06:30:00.000Z',
-    scriptPath: 'boletim-diretoria/main.py',
-  },
-];

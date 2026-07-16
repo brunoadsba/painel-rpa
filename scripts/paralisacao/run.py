@@ -27,9 +27,13 @@ os.environ["HEADLESS"] = "true"
 os.environ["PRIMEIRO_PLANO"] = "false"
 
 # --- Parse backend arguments ----------------------------------------------
+# NOTA: --openport-token é recebido do backend mas NÃO é usado aqui.
+# Este RPA autentica via Playwright (navegador) com credenciais do .env.
+# RPAs baseados em API devem usar openport_client.py com este token.
 parser = argparse.ArgumentParser()
 parser.add_argument("--bot-id", required=True)
 parser.add_argument("--openport-token", required=True)
+parser.add_argument("--triggered-by", default="")
 args, _ = parser.parse_known_args()
 execution_id = args.bot_id
 openport_token = args.openport_token
