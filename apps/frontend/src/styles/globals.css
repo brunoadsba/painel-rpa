@@ -17,7 +17,9 @@
   }
 
   @keyframes sweep {
-    to { transform: translateY(-50%) rotate(360deg); }
+    to {
+      transform: translateY(-50%) rotate(360deg);
+    }
   }
 
   .animate-sweep {
@@ -25,15 +27,25 @@
   }
 
   @keyframes fadeIn {
-    to { opacity: 1; }
+    to {
+      opacity: 1;
+    }
   }
 
   @keyframes modalIn {
-    from { transform: translateY(10px) scale(0.98); opacity: 0; }
-    to   { transform: translateY(0) scale(1); opacity: 1; }
+    from {
+      transform: translateY(10px) scale(0.98);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
   }
 
-  .animate-in { animation: modalIn 0.2s ease forwards; }
+  .animate-in {
+    animation: modalIn 0.2s ease forwards;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     * {

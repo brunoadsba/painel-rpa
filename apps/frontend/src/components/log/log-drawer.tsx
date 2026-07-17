@@ -13,6 +13,7 @@ export function LogDrawer() {
   const { isDrawerOpen, activeBotName, logs, closeDrawer } = useUIStore();
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: logs is the trigger to auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);

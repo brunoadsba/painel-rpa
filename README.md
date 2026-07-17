@@ -69,17 +69,19 @@ scripts/
 | `POST /api/auth/openport` | Autentica no OpenPort (rate: 10/min) |
 | `GET /api/bots` | Lista automações (público) |
 | `GET /api/bots/:id` | Detalhes de um bot (JWT) |
-| `GET /api/bots/:id/stream` | SSE — dispara execução + logs ao vivo (JWT) |
+| `POST /api/bots/:id/stream` | SSE — dispara execução + logs ao vivo (JWT + body credenciais) |
 | `GET /api/health` | Health check |
 
 ## Fluxo
 
-1. Clique em "Executar" → `<form>` nativo pede credenciais OpenPort
+1. Clique em "Executar" → Modal sempre abre pedindo credenciais OpenPort (token efêmero em memória)
 2. `POST /api/auth/openport` → retorna JWT (rate: 10/min)
-3. `GET /api/bots/:id/stream` → Node.js spawna Python com timeout
-4. Python executa e emite JSON lines via stdout → SSE → LogDrawer no frontend
-5. Logs persistem no SQLite em tempo real
-6. Cliente desconecta → processo filho é morto automaticamente
+3. `POST /api/bots/:id/stream` → envia JWT no header e `{ username, password }` no body.
+4. O backend valida o JWT e o body, muda o status do bot para `running`, e spawna o script Python injetando as credenciais via `env`.
+5. Se o servidor Node.js for reiniciado, bots que estavam com status `running` voltam para `idle` automaticamente no boot.
+6. Python executa e emite JSON lines via stdout → SSE → LogDrawer no frontend
+7. Logs persistem no SQLite em tempo real
+8. Cliente desconecta → processo filho é morto automaticamente
 
 ## Segurança
 

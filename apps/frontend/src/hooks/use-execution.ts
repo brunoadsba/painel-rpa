@@ -1,26 +1,37 @@
-import type { LogEntry } from '@torre-rpa/shared';
+import { useQueryClient } from '@tanstack/react-query';
+import type { AuthCredentials, LogEntry } from '@torre-rpa/shared';
 import { useCallback, useRef, useState } from 'react';
-import { getToken } from '../lib/auth-token';
 import { useUIStore } from '../stores/ui-store';
 
 export function useExecutionStream() {
   const abortRef = useRef<AbortController | null>(null);
   const { addLog, openDrawer } = useUIStore();
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const startStream = useCallback(
-    (botId: string, botName: string) => {
+    (botId: string, botName: string, credentials: AuthCredentials, token: string) => {
       abortRef.current?.abort();
       abortRef.current = new AbortController();
       setError(null);
 
       openDrawer(botName);
 
-      const token = getToken();
+      // Invalidar bots para refletir status 'running' imediatamente
+      queryClient.invalidateQueries({ queryKey: ['bots'] });
+
       const url = `/api/bots/${botId}/stream`;
 
       fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: credentials.username,
+          password: credentials.password,
+        }),
         signal: abortRef.current.signal,
       })
         .then(async (response) => {
@@ -66,6 +77,8 @@ export function useExecutionStream() {
                     level: 'success',
                     message: 'Execução concluída.',
                   });
+                  // Refetch bots para atualizar status done/error + lastRun
+                  queryClient.invalidateQueries({ queryKey: ['bots'] });
                 } else if (eventType === 'error') {
                   try {
                     const { error: msg } = JSON.parse(data) as { error: string };
@@ -78,6 +91,8 @@ export function useExecutionStream() {
                       message: msg,
                     });
                   } catch {}
+                  // Refetch bots para atualizar status após erro
+                  queryClient.invalidateQueries({ queryKey: ['bots'] });
                 } else {
                   try {
                     const entry = JSON.parse(data) as LogEntry;
@@ -100,9 +115,11 @@ export function useExecutionStream() {
             level: 'error',
             message: msg,
           });
+          // Refetch bots em caso de erro de rede
+          queryClient.invalidateQueries({ queryKey: ['bots'] });
         });
     },
-    [addLog, openDrawer],
+    [addLog, openDrawer, queryClient],
   );
 
   const stopStream = useCallback(() => {

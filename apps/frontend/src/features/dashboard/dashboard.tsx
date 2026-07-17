@@ -1,30 +1,25 @@
-import type { Bot } from '@torre-rpa/shared';
+import type { AuthCredentials, Bot } from '@torre-rpa/shared';
 import { AuthModal } from '../../components/auth/auth-modal';
 import { BotList } from '../../components/dashboard/bot-list';
 import { LogDrawer } from '../../components/log/log-drawer';
 import { useBots } from '../../hooks/use-bots';
 import { useExecutionStream } from '../../hooks/use-execution';
-import { useAuthStore } from '../../stores/auth-store';
 import { useUIStore } from '../../stores/ui-store';
 
 export function Dashboard() {
   const { data: bots, isLoading } = useBots();
   const { startStream } = useExecutionStream();
   const { openModal } = useUIStore();
-  const { isAuthenticated } = useAuthStore();
 
+  // Sempre abrir modal — cada execução requer identificação do operador
   const handleExecute = (bot: Bot) => {
-    if (!isAuthenticated) {
-      openModal(bot);
-      return;
-    }
-    startStream(bot.id, bot.name);
+    openModal(bot);
   };
 
-  const handleAuthSuccess = () => {
+  const handleAuthSuccess = (credentials: AuthCredentials, token: string) => {
     const bot = useUIStore.getState().selectedBot;
     if (!bot) return;
-    startStream(bot.id, bot.name);
+    startStream(bot.id, bot.name, credentials, token);
   };
 
   return (

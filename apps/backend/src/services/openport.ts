@@ -1,15 +1,18 @@
 /**
  * Serviço de autenticação OpenPort.
  *
- * Comportamento:
- * - Se OPENPORT_API_URL estiver definida no .env, fará chamada HTTP real
- * - Caso contrário, usa modo mock (para desenvolvimento)
+ * Comportamento controlado por OPENPORT_MOCK:
+ * - OPENPORT_MOCK=true  → modo mock (aceita qualquer credencial não-vazia, padrão para UAT)
+ * - OPENPORT_MOCK=false  → chamada HTTP real à API do OpenPort (requer OPENPORT_API_URL)
+ *
+ * IMPORTANTE: Este mock controla apenas a autenticação do backend (identificação do operador).
+ * O login real do Playwright no OpenPort sempre acontece de verdade via OPENPORT_LOGIN/OPENPORT_SENHA.
  */
 import type { AuthCredentials, AuthResponse } from '@torre-rpa/shared';
 
 const MOCK_SESSION = 'mock-openport-session-token';
 const API_URL = process.env.OPENPORT_API_URL;
-const IS_MOCK = !API_URL || process.env.OPENPORT_MOCK === 'true';
+const IS_MOCK = process.env.OPENPORT_MOCK === 'true';
 
 async function realAuthenticate(credentials: AuthCredentials): Promise<AuthResponse> {
   const controller = new AbortController();

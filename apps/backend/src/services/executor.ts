@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { Bot, LogEntry } from '@torre-rpa/shared';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { executions, logs } from '../db/schema.js';
+import { bots, executions, logs } from '../db/schema.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPTS_DIR = join(__dirname, '..', '..', '..', '..', 'scripts');
@@ -42,11 +42,18 @@ export function isBotRunning(botId: string): boolean {
   return runningBots.has(botId);
 }
 
+/** Opções para executeBot — evita 5+ parâmetros posicionais */
+export interface ExecuteBotOptions {
+  session: string;
+  triggeredBy: string;
+  openportLogin: string;
+  openportSenha: string;
+}
+
 export function executeBot(
   bot: Bot,
   onLog: (entry: LogEntry) => void,
-  token?: string,
-  triggeredBy?: string,
+  options: ExecuteBotOptions,
 ): { promise: Promise<string>; kill: () => void } {
   const botScript = join(SCRIPTS_DIR, bot.scriptPath);
   if (!existsSync(botScript)) {
@@ -68,7 +75,7 @@ export function executeBot(
         botName: bot.name,
         status: 'running',
         startedAt: now,
-        triggeredBy: triggeredBy ?? '',
+        triggeredBy: options.triggeredBy,
       })
       .run();
   } catch (err) {
@@ -79,16 +86,28 @@ export function executeBot(
 
   runningBots.add(bot.id);
 
+  // Atualizar bots.status = 'running'
+  try {
+    db.update(bots).set({ status: 'running' }).where(eq(bots.id, bot.id)).run();
+  } catch {
+    // Falha de DB não impede a execução
+  }
+
   const python = findPython();
 
-  const proc = spawn(python, [
-    botScript,
-    '--bot-id',
-    executionId,
-    '--openport-token',
-    token ?? 'mock-token',
-    ...(triggeredBy ? ['--triggered-by', triggeredBy] : []),
-  ]);
+  // Credenciais injetadas via env — nunca via argv (segurança)
+  // NOTA: Não logar env nem credenciais em nenhum lugar
+  const proc = spawn(
+    python,
+    [botScript, '--bot-id', executionId, '--triggered-by', options.triggeredBy],
+    {
+      env: {
+        ...process.env,
+        OPENPORT_LOGIN: options.openportLogin,
+        OPENPORT_SENHA: options.openportSenha,
+      },
+    },
+  );
 
   let finished = false;
   let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -126,12 +145,22 @@ export function executeBot(
     finished = true;
     if (timeout) clearTimeout(timeout);
     runningBots.delete(bot.id);
+
+    const finishedAt = new Date().toISOString();
+
+    // Atualizar execução
     try {
-      const finishedAt = new Date().toISOString();
       db.update(executions)
         .set({ status, finishedAt, result })
         .where(eq(executions.id, executionId))
         .run();
+    } catch {
+      // DB update failure should not crash the process
+    }
+
+    // Atualizar bots.status e lastRun
+    try {
+      db.update(bots).set({ status, lastRun: finishedAt }).where(eq(bots.id, bot.id)).run();
     } catch {
       // DB update failure should not crash the process
     }
@@ -238,4 +267,18 @@ export function executeBot(
   };
 
   return { promise, kill };
+}
+
+/**
+ * Reseta bots órfãos com status 'running' para 'idle'.
+ * Deve ser chamado no boot do servidor — após crash/reinício,
+ * não existe mais processo Python vivo para esses bots.
+ */
+export function resetOrphanBots(): number {
+  try {
+    const result = db.update(bots).set({ status: 'idle' }).where(eq(bots.status, 'running')).run();
+    return result.changes;
+  } catch {
+    return 0;
+  }
 }

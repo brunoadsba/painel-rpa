@@ -4,6 +4,7 @@ Entry point for backend execution via child_process.spawn().
 Standard interface for all RPAs in Torre RPA:
   - Parse --bot-id, --openport-token, --triggered-by from backend
   - Emit JSON logs to stdout for SSE streaming via core.logger
+  - Backend can inject OPENPORT_LOGIN / OPENPORT_SENHA via environment variables
 """
 import argparse
 import sys

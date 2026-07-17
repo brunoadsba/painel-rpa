@@ -36,7 +36,8 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 flex items-center justify-between px-8 py-3.5 bg-gradient-to-b from-navy-800 to-[#011245] border-b border-navy-600 overflow-hidden">
-      <div className="absolute top-1/2 left-16 w-[520px] h-[520px] rounded-full pointer-events-none animate-sweep"
+      <div
+        className="absolute top-1/2 left-16 w-[520px] h-[520px] rounded-full pointer-events-none animate-sweep"
         style={{
           background:
             'conic-gradient(from 0deg, rgba(58,166,166,0.16), transparent 22%, transparent 100%)',

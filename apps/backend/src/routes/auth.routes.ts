@@ -9,34 +9,38 @@ const authSchema = z.object({
 });
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post('/openport', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const parsed = authSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        success: false,
-        error: parsed.error.errors.map((e) => e.message).join('; '),
-      });
-    }
+  app.post(
+    '/openport',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const parsed = authSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: parsed.error.errors.map((e) => e.message).join('; '),
+        });
+      }
 
-    try {
-      const session = await authenticateOpenPort(parsed.data);
-      const token = signToken({
-        sub: parsed.data.username,
-        session: session.token,
-      });
+      try {
+        const session = await authenticateOpenPort(parsed.data);
+        const token = signToken({
+          sub: parsed.data.username,
+          session: session.token,
+        });
 
-      return reply.send({
-        success: true,
-        data: {
-          token,
-          expiresAt: session.expiresAt,
-        },
-      });
-    } catch (err) {
-      return reply.status(401).send({
-        success: false,
-        error: err instanceof Error ? err.message : 'Falha na autenticação',
-      });
-    }
-  });
+        return reply.send({
+          success: true,
+          data: {
+            token,
+            expiresAt: session.expiresAt,
+          },
+        });
+      } catch (err) {
+        return reply.status(401).send({
+          success: false,
+          error: err instanceof Error ? err.message : 'Falha na autenticação',
+        });
+      }
+    },
+  );
 }

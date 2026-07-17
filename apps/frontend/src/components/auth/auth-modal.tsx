@@ -1,4 +1,4 @@
-import type { Bot } from '@torre-rpa/shared';
+import type { AuthCredentials } from '@torre-rpa/shared';
 import { useState } from 'react';
 import { authenticate } from '../../services/auth';
 import { useAuthStore } from '../../stores/auth-store';
@@ -8,7 +8,7 @@ import { Input } from '../ui/input';
 import { Modal } from '../ui/modal';
 
 interface AuthModalProps {
-  onSuccess: () => void;
+  onSuccess: (credentials: AuthCredentials, token: string) => void;
 }
 
 export function AuthModal({ onSuccess }: AuthModalProps) {
@@ -28,8 +28,12 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
     try {
       const res = await authenticate({ username, password });
       setAuth(res.token, res.expiresAt);
+      const credentials: AuthCredentials = { username, password };
+      const token = res.token;
+      // Limpar senha do estado React imediatamente após capturar
+      setPassword('');
       closeModal();
-      onSuccess();
+      onSuccess(credentials, token);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha na autenticação');
     } finally {
@@ -37,8 +41,14 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
     }
   };
 
+  const handleClose = () => {
+    setPassword('');
+    setError('');
+    closeModal();
+  };
+
   return (
-    <Modal open={isModalOpen} onClose={closeModal}>
+    <Modal open={isModalOpen} onClose={handleClose}>
       <div className="font-mono text-[10px] tracking-widest text-amber uppercase mb-2">
         Autenticação OpenPort
       </div>
@@ -71,7 +81,7 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
         />
 
         <div className="flex gap-2.5 mt-5">
-          <Button variant="secondary" className="flex-1" onClick={closeModal}>
+          <Button variant="secondary" className="flex-1" onClick={handleClose}>
             Cancelar
           </Button>
           <Button

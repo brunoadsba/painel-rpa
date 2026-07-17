@@ -74,9 +74,10 @@ torre-rpa/
 - SSE (Server-Sent Events) em vez de WebSocket. Mais simples, unidirecional, nativo no HTTP.
 
 ### Autenticação
-- JWT stateless (HS256). Backend autentica no OpenPort, devolve um JWT. Frontend armazena no localStorage.
-- **Rate limiting:** 10 req/min na rota de auth (força bruta), 100 req/min global.
+- **Credenciais por execução:** Para UAT interno, o token JWT gerado é efêmero e mantido em memória no frontend (não é persistido no `localStorage`). Cada clique em "Executar" sempre exibe o modal solicitando credenciais.
+- **Rate limiting:** 10 req/min na rota de auth (prevenção de força bruta), 100 req/min global. Nenhuma política de rate limiting / bloqueio temporário de usuário foi adicionada para o escopo do UAT local.
 - `JWT_SECRET` é obrigatório — sem fallback, throw em tempo de módulo se ausente.
+- **Segurança de credenciais:** Senha trafega apenas em memória durante a requisição de execução. Nunca é salva em banco de dados, localStorage ou logs. O banco persiste apenas o operador (`triggeredBy`).
 
 ### Banco de Dados
 - **SQLite** em desenvolvimento (`data/torre-rpa.db`), **PostgreSQL** em produção.
@@ -105,8 +106,9 @@ torre-rpa/
 - `SIGTERM`/`SIGINT` fecham o servidor Fastify + conexão SQLite — previne corrupção de DB em container.
 
 ### OpenPort (autenticação híbrida)
-- `OPENPORT_MOCK=true` ou `OPENPORT_API_URL` ausente → mock (aceita qualquer credencial).
-- `OPENPORT_MOCK!=true` + `OPENPORT_API_URL` real → chamada HTTP com timeout.
+- `OPENPORT_MOCK=true` → modo mock (padrão para UAT interno, aceita qualquer par usuário/senha não-vazio para gerar o JWT).
+- `OPENPORT_MOCK=false` → chamada HTTP real à API do OpenPort.
+- **Duplo papel das credenciais:** As credenciais digitadas no modal autenticam no backend (via mock para obter o JWT) e também são passadas para o processo filho do Playwright para o login real no portal. Logo, um login com mock pode ter sucesso, mas falhar na execução real do RPA caso a senha do OpenPort esteja incorreta.
 
 ### Monorepo npm workspaces
 - `packages/shared` — tipos TypeScript compartilhados entre frontend e backend
@@ -120,19 +122,22 @@ torre-rpa/
 | `GET` | `/api/health` | Não | Health check |
 | `GET` | `/api/bots` | Não | Lista automações (público) |
 | `GET` | `/api/bots/:id` | Bearer JWT | Detalhes de um bot |
-| `GET` | `/api/bots/:id/stream` | Bearer JWT | SSE — dispara execução + logs ao vivo |
+| `POST` | `/api/bots/:id/stream` | Bearer JWT | SSE — dispara execução + logs ao vivo (body com credenciais) |
 
 ## Fluxo de Execução
 
-1. Usuário clica "Executar" no bot
-2. Modal pede login/senha do OpenPort (com `<form>` nativo, Enter funciona)
-3. `POST /api/auth/openport` — retorna JWT
-4. `GET /api/bots/:id/stream` — backend verifica se bot já está rodando, cria registro no banco, spawna `python scripts/<bot>/run.py`
-5. Python emite JSON lines no stdout
-6. Node.js captura, persiste no SQLite (com try/catch) e envia via SSE
-7. Frontend renderiza cada log em tempo real; trata eventos `done` e `error`
-8. Se cliente desconectar, processo Python é morto (`req.raw.on('close')`)
-9. Timeout configurável (`EXECUTION_TIMEOUT_MS`, padrão 30min)
+1. Usuário clica "Executar" no bot (modal abre sempre)
+2. Modal pede login/senha do OpenPort (Enter envia)
+3. `POST /api/auth/openport` — backend valida (mock ou real) e retorna JWT
+4. `POST /api/bots/:id/stream` com JWT no header e `{ username, password }` no body
+5. Backend valida se `username === JWT.sub` e se o bot já está rodando (retorna erro amigável via SSE se estiver)
+6. Backend atualiza `bots.status = 'running'` e insere a execução (`triggeredBy = username`)
+7. Backend spawna `python scripts/<bot>/run.py` passando as credenciais no `env` do processo (nunca no `argv`)
+8. Python executa e emite JSON no stdout; backend persiste no SQLite e repassa via SSE
+9. Ao concluir (sucesso ou erro), o status do bot é atualizado (`bots.status = 'done'/'error'`) e a data da última execução é registrada (`lastRun`)
+10. Se o backend crashar/reiniciar, o status do bot é redefinido para `idle` automaticamente no boot do servidor (evita status órfão preso em `running`)
+11. Se o cliente fechar a aba/desconectar, o backend mata o processo Python filho correspondente
+12. Timeout configurável de execução (`EXECUTION_TIMEOUT_MS`, padrão 30min)
 
 ## Convenções
 

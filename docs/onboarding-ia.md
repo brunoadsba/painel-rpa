@@ -170,7 +170,7 @@ src/
 | `POST` | `/api/auth/openport` | ❌ | Autentica no OpenPort → retorna JWT |
 | `GET` | `/api/bots` | ❌ | Lista bots (público, sem auth) |
 | `GET` | `/api/bots/:id` | ✅ JWT | Detalhes de um bot |
-| `GET` | `/api/bots/:id/stream` | ✅ JWT | SSE — dispara execução + logs ao vivo |
+| `POST` | `/api/bots/:id/stream` | ✅ JWT | SSE — dispara execução + logs ao vivo (body com credenciais) |
 
 ### 5.2. Fluxo de autenticação
 
@@ -299,7 +299,7 @@ Ao iniciar o backend, se a tabela `bots` estiver vazia, insere 1 bot:
 ]}
 ```
 
-### GET /api/bots/:id/stream (SSE)
+### POST /api/bots/:id/stream (SSE)
 ```
 data: {"executionId":"uuid","level":"info","message":"Acessando OpenPort...","timestamp":"..."}
 data: {"executionId":"uuid","level":"success","message":"Login efetuado.","timestamp":"..."}

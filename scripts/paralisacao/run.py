@@ -26,10 +26,10 @@ os.environ["PARALISACAO_ROOT"] = str(PARALISACAO_DIR)
 os.environ["HEADLESS"] = "true"
 os.environ["PRIMEIRO_PLANO"] = "false"
 
-# --- Parse backend arguments ----------------------------------------------
 # NOTA: --openport-token é recebido do backend mas NÃO é usado aqui.
-# Este RPA autentica via Playwright (navegador) com credenciais do .env.
-# RPAs baseados em API devem usar openport_client.py com este token.
+# As credenciais (OPENPORT_LOGIN e OPENPORT_SENHA) são injetadas pelo backend
+# no ambiente (env) do processo spawn. O arquivo .env local serve apenas para
+# configurações operacionais (caminho da planilha, headless, timeouts, etc.).
 parser = argparse.ArgumentParser()
 parser.add_argument("--bot-id", required=True)
 parser.add_argument("--openport-token", default="")

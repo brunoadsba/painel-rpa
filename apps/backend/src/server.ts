@@ -6,8 +6,15 @@ import { initDatabase, sqlite } from './db/index.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { botsRoutes } from './routes/bots.routes.js';
 import { executionRoutes } from './routes/execution.routes.js';
+import { resetOrphanBots } from './services/executor.js';
 
 initDatabase();
+
+// Resetar bots órfãos presos em 'running' após crash/reinício
+const resetCount = resetOrphanBots();
+if (resetCount > 0) {
+  console.log(`[Boot] Reset ${resetCount} bot(s) de 'running' para 'idle'`);
+}
 
 export async function buildApp() {
   const server = Fastify({ logger: true });
