@@ -24,8 +24,8 @@ clica em "Executar" e acompanha os logs em tempo real.
 | Status | O quê |
 |--------|-------|
 | ✅ Pronto | RPA de Paralisação (real, com Playwright) |
-| 🔧 Arquitetura | Monorepo Node.js + Python híbrido |
-| 🚀 Próximo | Adicionar novos RPAs seguindo template `__template__/run.py` |
+| ✅ Pronto | Arquitetura monorepo Node.js + Python híbrido |
+| 🔧 Próximo | Adicionar novos RPAs seguindo template |
 
 ---
 
@@ -39,7 +39,7 @@ clica em "Executar" e acompanha os logs em tempo real.
 | Estado UI | Zustand | 5 |
 | Roteamento | React Router | 7 |
 | Backend | Fastify + TypeScript | 5 |
-| ORM | Drizzle | 0.38 |
+| ORM | Drizzle | 0.45 |
 | Banco | SQLite (dev) / PostgreSQL (prod) |
 | Validação | Zod | 3 |
 | Python | Python 3.12.10 | Scripts RPA |
@@ -61,22 +61,22 @@ Painel RPA/
 │   │   │   ├── hooks/          use-bots, use-execution
 │   │   │   ├── services/       api, auth, bots
 │   │   │   ├── stores/         auth-store, ui-store (Zustand)
-│   │   │   └── styles/         globals.css (Tailwind)
+│   │   │   └── styles/         globals.css (Tailwind + animações)
 │   │   └── vite.config.ts      Porta 5173, proxy /api → :3001
 │   │
 │   └── backend/                Fastify + Drizzle
 │       ├── src/
 │       │   ├── db/             Schema (bots, executions, logs) + seed (1 bot)
-│       │   ├── routes/         auth, bots, execution
+│       │   ├── routes/         auth (rate 10/min), bots, execution (SSE apenas)
 │       │   ├── services/       openport (híbrido mock/real), executor (spawn Python)
-│       │   ├── middleware/     JWT verify
-│       ├── __tests__/          Testes E2E (11 testes, Vitest)
+│       │   ├── middleware/     JWT verify (HS256)
+│       │   └── lib/            JWT sign/verify (sem fallback de secret)
+│       ├── __tests__/          Testes E2E (9 testes, Vitest)
 │       ├── vitest.config.ts    Config Vitest
-│       │   └── lib/            JWT sign/verify
 │       └── data/               SQLite (gitignored)
 │
 ├── packages/
-│   └── shared/                 Tipos TS: Bot, Execution, LogEntry, AuthCredentials
+│   └── shared/                 Tipos TS: Bot (com scriptPath), Execution, LogEntry
 │       └── src/types.ts
 │
 ├── scripts/                    RPAs em Python
@@ -84,10 +84,10 @@ Painel RPA/
 │   ├── .venv/                  Virtualenv (gitignored)
 │   ├── core/
 │   │   ├── logger.py           emit_log() → JSON stdout
-│   │   ├── models.py           Pydantic: BotConfig, LogEntry, ExecutionResult
-│   │   └── openport_client.py  Client HTTP funcional (lê OPENPORT_API_URL do env)
+│   │   ├── models.py           Pydantic com Literal (level tipado)
+│   │   └── openport_client.py  Client HTTP funcional
 │   ├── paralisacao/            ✅ RPA REAL (Playwright)
-│   │   ├── run.py              Entry point headless para backend
+│   │   ├── run.py              Entry point headless (--openport-token opcional)
 │   │   ├── src/paralisacao/    14 módulos
 │   │   ├── tests/              30 testes (pytest, 83% coverage)
 │   │   ├── data/               Planilha, lookup de motivos
@@ -100,16 +100,13 @@ Painel RPA/
 │   └── Dockerfile.frontend     Multi-stage + nginx
 │
 ├── docs/
-│   ├── contexto.md             ← Este arquivo
-│   ├── memory.md               Memória técnica do projeto
-│   └── guia-operacional.md     Guia do RPA de paralisação
+│   ├── onboarding-ia.md         ← Este arquivo
+│   └── memory.md               Memória técnica do projeto
 │
 ├── .env.example                Template de variáveis de ambiente
 ├── .gitignore
 ├── biome.json                  Config do linter
-├── package.json                npm workspaces root
-├── painel.md                   Documentação completa do monorepo (487 linhas)
-└── torre-rpa.html              Mockup original (legado)
+└── package.json                npm workspaces root
 ```
 
 ---
@@ -154,12 +151,12 @@ src/
 5. `log-drawer` renderiza cada log em tempo real
 6. Ao final, recebe `event: done` e atualiza status do bot
 
-### 4.3. Hooks principais
+### 4.3. Hooks
 
-| Hook | Função | Tecnologia |
-|------|--------|-----------|
-| `use-bots.ts` | Listar bots + executar | React Query |
-| `use-execution.ts` | Conectar SSE + tratar eventos | EventSource nativo |
+| Hook | Função |
+|------|--------|
+| `use-bots.ts` | Listar bots via React Query |
+| `use-execution.ts` | Conectar SSE + tratar eventos done/error + estado de erro |
 
 ---
 
@@ -173,8 +170,7 @@ src/
 | `POST` | `/api/auth/openport` | ❌ | Autentica no OpenPort → retorna JWT |
 | `GET` | `/api/bots` | ❌ | Lista bots (público, sem auth) |
 | `GET` | `/api/bots/:id` | ✅ JWT | Detalhes de um bot |
-| `POST` | `/api/bots/:id/execute` | ✅ JWT | Dispara execução |
-| `GET` | `/api/bots/:id/stream` | ✅ JWT | SSE — logs ao vivo |
+| `GET` | `/api/bots/:id/stream` | ✅ JWT | SSE — dispara execução + logs ao vivo |
 
 ### 5.2. Fluxo de autenticação
 
@@ -203,9 +199,15 @@ Cada linha do stdout é um JSON → persiste no SQLite + envia via SSE
 Script encerra → update execution (status: done/error)
 ```
 
-**⚠️ Guardião de concorrência:** um `Set<string>` (`runningBots`) impede que o mesmo bot seja executado duas vezes simultaneamente. A rota `POST /api/bots/:id/execute` retorna HTTP 409 se o bot já estiver rodando.
+**⚠️ Guardião de concorrência:** `Set<string>` (`runningBots`) impede execução duplicada.
 
-**⚠️ Proteções adicionais:** Timeout configurável (`EXECUTION_TIMEOUT_MS`, padrão 30min); cliente SSE desconectado mata o processo filho; valida `scriptPath` antes de registrar execução.
+**⚠️ Proteções adicionais:**
+- Timeout configurável (`EXECUTION_TIMEOUT_MS`, padrão 30min)
+- Cliente SSE desconectado mata o processo filho
+- Valida `existsSync()` no `scriptPath` antes de registrar execução
+- `findPython()` cacheia o caminho do Python (não spawna a cada chamada)
+- DB writes e `onLog` com try/catch individual — falha não quebra execução
+- `stderr` também capturado e quebrado por linha
 
 ### 5.4. Error handler global
 
@@ -213,11 +215,16 @@ Script encerra → update execution (status: done/error)
 
 ### 5.5. OpenPort híbrido (mock/real)
 
-`services/openport.ts` lê `OPENPORT_API_URL` do ambiente:
-- Se configurada com URL real (diferente de `example.com`): faz chamada HTTP
-- Caso contrário: mantém o mock (aceita qualquer credencial)
+`services/openport.ts`:
+- `OPENPORT_MOCK=true` ou `OPENPORT_API_URL` ausente → mock (aceita qualquer credencial)
+- Caso contrário: HTTP real com AbortController (timeout 15s)
 
-### 5.4. Middleware
+### 5.6. Rate limiting
+
+- **10 req/min** na rota `POST /api/auth/openport` (força bruta)
+- **100 req/min** nas demais rotas (global)
+
+### 5.7. Middleware
 
 - `auth.ts`: verifica JWT no header `Authorization: Bearer <token>`
 - Usado nas rotas protegidas (`/api/bots/:id`, `/api/bots/:id/stream`)
@@ -314,7 +321,7 @@ interface Execution { id, botId, botName, status, startedAt, finishedAt, trigger
 interface LogEntry { id, executionId, timestamp, level: 'info'|'success'|'warn'|'error', message }
 interface AuthCredentials { username, password }
 interface AuthResponse { token, expiresAt }
-interface ApiResponse<T> { success, data?, error? }
+type ApiResponse<T> = { success: true; data: T } | { success: false; error: string }
 ```
 
 ---
@@ -337,7 +344,7 @@ telas e registrar paralisações automaticamente. 14 módulos, 30 testes.
 
 > **Nota:** Novos RPAs seguem o template em `scripts/__template__/run.py` e são registrados no seed.
 
-### 9.3. Como a paralisação funciona (domínio)
+### 9.2.1. Como a paralisação funciona (domínio)
 
 No porto, quando um navio está atracado carregando/descarregando, a operação
 pode ser **interrompida temporariamente** por motivos como:
@@ -396,7 +403,7 @@ docker compose -f docker/docker-compose.yml up
 
 - `biome check` — lint + formatação
 - `tsc --noEmit` — typecheck em todos workspaces
-- `vitest run` — 11 testes E2E (apps/backend)
+- `vitest run` — 9 testes E2E (apps/backend)
 
 ---
 
@@ -417,7 +424,7 @@ from core.models import BotConfig
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--bot-id", required=True)
-parser.add_argument("--openport-token", required=True)
+parser.add_argument("--openport-token", default="")
 args = parser.parse_args()
 
 config = BotConfig(bot_id=args.bot_id, name="Novo RPA", openport_token=args.openport_token)
@@ -476,7 +483,7 @@ npm run dev:frontend  # Vite :5173
 ### Testes
 
 ```bash
-# Backend (11 testes E2E)
+# Backend (9 testes E2E)
 npm run test -w apps/backend
 
 # Python (paralisacao)
@@ -505,9 +512,7 @@ npm run typecheck
 
 | Arquivo | Conteúdo |
 |---------|----------|
-| `painel.md` | Documentação completa original (489 linhas) |
 | `docs/memory.md` | Memória técnica resumida |
-| `docs/guia-operacional.md` | Guia detalhado do RPA de paralisação |
 | `scripts/paralisacao/run.py` | Entry point da paralisação |
 | `apps/backend/src/services/executor.ts` | Spawn do Python + SSE |
 | `apps/backend/src/db/seed.ts` | Seed data (1 bot) |

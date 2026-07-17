@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
-import { initDatabase } from './db/index.js';
+import { initDatabase, sqlite } from './db/index.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { botsRoutes } from './routes/bots.routes.js';
 import { executionRoutes } from './routes/execution.routes.js';
@@ -12,6 +13,11 @@ export async function buildApp() {
   const server = Fastify({ logger: true });
 
   await server.register(cors, { origin: true });
+
+  await server.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+  });
 
   server.setErrorHandler((error, _request, reply) => {
     server.log.error(error);
@@ -38,9 +44,19 @@ async function startServer() {
   const server = await buildApp();
   const port = Number(process.env.BACKEND_PORT) || 3001;
 
+  const shutdown = async () => {
+    server.log.info('Shutting down gracefully...');
+    await server.close();
+    sqlite.close();
+  };
+
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+
   try {
-    await server.listen({ port, host: '0.0.0.0' });
-    console.log(`🚀 Torre RPA Backend running on http://localhost:${port}`);
+    const host = process.env.BACKEND_HOST || '0.0.0.0';
+    await server.listen({ port, host });
+    server.log.info(`Torre RPA Backend running on http://${host}:${port}`);
   } catch (err) {
     server.log.error(err);
     process.exit(1);

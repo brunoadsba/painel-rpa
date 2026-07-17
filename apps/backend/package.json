@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
+    "@fastify/rate-limit": "^11.1.0",
     "@torre-rpa/shared": "*",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^16.4.7",

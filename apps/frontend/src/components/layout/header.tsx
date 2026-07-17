@@ -1,11 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function Header() {
   const [time, setTime] = useState(new Date());
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(id);
+    const tick = () => setTime(new Date());
+    intervalRef.current = setInterval(tick, 1000);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        tick();
+        intervalRef.current = setInterval(tick, 1000);
+      } else if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
   const timeStr = time.toLocaleTimeString('pt-BR');
@@ -19,15 +36,13 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 flex items-center justify-between px-8 py-3.5 bg-gradient-to-b from-navy-800 to-[#011245] border-b border-navy-600 overflow-hidden">
-      <div
-        className="absolute top-1/2 left-16 w-[520px] h-[520px] rounded-full pointer-events-none animate-[sweep_6s_linear_infinite]"
+      <div className="absolute top-1/2 left-16 w-[520px] h-[520px] rounded-full pointer-events-none animate-sweep"
         style={{
           background:
             'conic-gradient(from 0deg, rgba(58,166,166,0.16), transparent 22%, transparent 100%)',
           transform: 'translateY(-50%)',
         }}
       />
-      <style>{'@keyframes sweep { to { transform: translateY(-50%) rotate(360deg); } }'}</style>
 
       <div className="flex items-center gap-3.5 relative z-10">
         <div className="flex items-center justify-center bg-white rounded-lg px-2.5 py-2 shadow-md">

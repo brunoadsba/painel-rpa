@@ -1,16 +1,18 @@
 import type { LogEntry } from '@torre-rpa/shared';
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { getToken } from '../lib/auth-token';
 import { useUIStore } from '../stores/ui-store';
 
 export function useExecutionStream() {
   const abortRef = useRef<AbortController | null>(null);
   const { addLog, openDrawer } = useUIStore();
+  const [error, setError] = useState<string | null>(null);
 
   const startStream = useCallback(
     (botId: string, botName: string) => {
       abortRef.current?.abort();
       abortRef.current = new AbortController();
+      setError(null);
 
       openDrawer(botName);
 
@@ -22,9 +24,20 @@ export function useExecutionStream() {
         signal: abortRef.current.signal,
       })
         .then(async (response) => {
-          const reader = response.body?.getReader();
-          if (!reader) return;
+          if (!response.ok || !response.body) {
+            const text = `Erro ao conectar SSE: ${response.status} ${response.statusText}`;
+            setError(text);
+            addLog({
+              id: crypto.randomUUID(),
+              executionId: '',
+              timestamp: new Date().toISOString(),
+              level: 'error',
+              message: text,
+            });
+            return;
+          }
 
+          const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
 
@@ -36,17 +49,58 @@ export function useExecutionStream() {
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
 
+            let eventType = 'message';
+
             for (const line of lines) {
+              if (line.startsWith('event: ')) {
+                eventType = line.slice(7).trim();
+                continue;
+              }
               if (line.startsWith('data: ')) {
-                try {
-                  const entry = JSON.parse(line.slice(6)) as LogEntry;
-                  addLog(entry);
-                } catch {}
+                const data = line.slice(6);
+                if (eventType === 'done') {
+                  addLog({
+                    id: crypto.randomUUID(),
+                    executionId: '',
+                    timestamp: new Date().toISOString(),
+                    level: 'success',
+                    message: 'Execução concluída.',
+                  });
+                } else if (eventType === 'error') {
+                  try {
+                    const { error: msg } = JSON.parse(data) as { error: string };
+                    setError(msg);
+                    addLog({
+                      id: crypto.randomUUID(),
+                      executionId: '',
+                      timestamp: new Date().toISOString(),
+                      level: 'error',
+                      message: msg,
+                    });
+                  } catch {}
+                } else {
+                  try {
+                    const entry = JSON.parse(data) as LogEntry;
+                    addLog(entry);
+                  } catch {}
+                }
+                eventType = 'message';
               }
             }
           }
         })
-        .catch(() => {});
+        .catch((err: Error) => {
+          if (err.name === 'AbortError') return;
+          const msg = `Erro na conexão: ${err.message}`;
+          setError(msg);
+          addLog({
+            id: crypto.randomUUID(),
+            executionId: '',
+            timestamp: new Date().toISOString(),
+            level: 'error',
+            message: msg,
+          });
+        });
     },
     [addLog, openDrawer],
   );
@@ -55,5 +109,5 @@ export function useExecutionStream() {
     abortRef.current?.abort();
   }, []);
 
-  return { startStream, stopStream };
+  return { startStream, stopStream, error };
 }

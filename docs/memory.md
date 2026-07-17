@@ -14,7 +14,7 @@ Painel web para centralizar, autenticar e executar scripts de automação RPA do
 | Estilização | Tailwind CSS 3 | Produtivo, design system consistente |
 | Estado servidor | TanStack React Query | Cache, refetch, mutations |
 | Estado UI | Zustand | Leve, sem boilerplate |
-| Roteamento | React Router v7 | SPA (~/dashboard, ~/historico no futuro) |
+| Roteamento | React Router v7 | SPA |
 | Backend | Fastify + TypeScript | Rápido, schema-based, tipado |
 | ORM | Drizzle (SQLite dev / PostgreSQL prod) | Leve, type-safe, schema compartilhável |
 | Validação | Zod | Schemas compartilháveis |
@@ -40,12 +40,12 @@ torre-rpa/
 │   │   │   └── styles/        # globals.css (Tailwind directives)
 │   │   └── ...
 │   └── backend/           Fastify + TypeScript
-│       ├── __tests__/        # Testes E2E (11 testes, Vitest)
+│       ├── __tests__/        # Testes E2E (9 testes, Vitest)
 │       ├── src/
 │       │   ├── db/            # Schema Drizzle + conexão SQLite + seed
-│       │   ├── routes/        # auth, bots, execution
+│       │   ├── routes/        # auth, bots, execution (SSE)
 │       │   ├── services/      # openport (híbrido), executor (spawn Python)
-│       │   ├── middleware/    # auth
+│       │   ├── middleware/    # auth (JWT)
 │       │   └── lib/           # jwt
 │       ├── vitest.config.ts   # Config Vitest
 │       ├── data/              # SQLite (dev), gitignored
@@ -55,8 +55,8 @@ torre-rpa/
 ├── scripts/               RPAs em Python
 │   ├── .venv/             Python 3.12.10 isolado
 │   ├── __template__/      Template para novos RPAs (run.py)
-│   ├── core/              Módulo compartilhado (openport_client funcional, logger, models)
-│   └── paralisacao/       RPA real (Playwright, 14 módulos)
+│   ├── core/              Módulo compartilhado (logger, models, openport_client)
+│   └── paralisacao/       RPA real (Playwright, 14 módulos, 30 testes)
 ├── docker/
 │   ├── docker-compose.yml  # postgres + backend + frontend
 │   ├── Dockerfile.backend
@@ -69,76 +69,78 @@ torre-rpa/
 ### Node.js + Python (híbrido)
 - **Fase 1 (atual):** Backend Node.js spawna scripts Python via `child_process.spawn`. Python emite logs como JSON lines no stdout → Node.js encaminha via SSE para o frontend.
 - **Fase 2 (futuro):** Microserviço Python (FastAPI) para agentes de IA. Node.js vira API gateway.
-- **Por quê:** Python é necessário para bibliotecas de IA/LLM (langchain, crewai, openai) no futuro. Começar com child_process é mais simples e evolui naturalmente para microserviço.
 
 ### Comunicação em tempo real
-- SSE (Server-Sent Events) em vez de WebSocket. Mais simples, unidirecional (backend → frontend), nativo no HTTP, suficiente para logs de execução.
+- SSE (Server-Sent Events) em vez de WebSocket. Mais simples, unidirecional, nativo no HTTP.
 
 ### Autenticação
-- JWT stateless. Backend autentica no OpenPort, devolve um JWT com a session token. Frontend armazena no localStorage e envia em todas as requisições.
-
-### Assets
-- Logo CODEBA salvo como PNG em `apps/frontend/public/codeba-logo.png` (16KB).
-- Referenciado via `/codeba-logo.png` no `<img>` do header — sem base64 inline, mais leve e manutenível.
-- Container `bg-white rounded-lg px-2.5 py-2` com `h-9` (36px) para exibir o logo completo (AUTORIDADE PORTUÁRIA + CODEBA).
+- JWT stateless (HS256). Backend autentica no OpenPort, devolve um JWT. Frontend armazena no localStorage.
+- **Rate limiting:** 10 req/min na rota de auth (força bruta), 100 req/min global.
+- `JWT_SECRET` é obrigatório — sem fallback, throw em tempo de módulo se ausente.
 
 ### Banco de Dados
 - **SQLite** em desenvolvimento (`data/torre-rpa.db`), **PostgreSQL** em produção.
 - Drizzle ORM com schema type-safe. Tabelas: `bots`, `executions`, `logs`.
-- Auto-init na inicialização do servidor: cria tabelas + seed com 1 bot (`paralisacao`).
-- Seed data isolado em `db/seed.ts` (não mais inline no `index.ts`).
-- Migrações futuras via `drizzle-kit generate` + `drizzle-kit migrate`.
-- Persistência de execuções e logs em tempo real (cada log do Python é salvo no banco).
+- Auto-init na inicialização: raw SQL em `initDatabase()` + comentário de sync com `schema.ts`.
+- Seed data em `db/seed.ts` (1 bot: `paralisacao`).
 
 ### Execução concorrente
-- `executor.ts` mantém um `Set<string>` de bots em execução (`runningBots`).
-- `POST /api/bots/:id/execute` verifica se o bot já está rodando → retorna HTTP 409 se sim.
-- Ao finalizar (done/error), o bot é removido do set automaticamente.
+- `executor.ts` mantém `Set<string>` de bots em execução (`runningBots`).
+- `GET /api/bots/:id/stream` é a ÚNICA rota que dispara execução (via SSE).
+- `POST /api/bots/:id/execute` foi removida (era dead code — frontend só usava SSE).
 
 ### Tratamento de erros
-- Fastify `setErrorHandler` global em `server.ts` captura exceções não tratadas.
-- Respostas seguem o formato `{ success: false, error: string }`.
+- Fastify `setErrorHandler` global captura exceções não tratadas → `{ success: false, error: string }`.
+- `executor.ts`: DB writes e `onLog` com try/catch isolados — falha de IO não quebra a execução.
+- Frontend: SSE trata `event: done` e `event: error`; erros de rede não são silenciosos.
+
+### Segurança
+- `JWT_SECRET` sem fallback — o servidor não inicializa se não estiver definido.
+- `jwt.verify` com `algorithms: ['HS256']` explícito — prevenção contra algorithm confusion.
+- `openport.ts`: mock via `OPENPORT_MOCK=true` explícito (não mais heuristic `includes('example.com')`).
+- Fetch para OpenPort com AbortController (timeout 15s).
+- `:id` nas rotas validado (rejeita vazio/null).
+
+### Graceful Shutdown
+- `SIGTERM`/`SIGINT` fecham o servidor Fastify + conexão SQLite — previne corrupção de DB em container.
 
 ### OpenPort (autenticação híbrida)
-- `openport.ts` lê `OPENPORT_API_URL` do ambiente.
-- Se a URL estiver configurada e não for `example.com`, faz chamada HTTP real.
-- Caso contrário, mantém comportamento mock (aceita qualquer credencial).
+- `OPENPORT_MOCK=true` ou `OPENPORT_API_URL` ausente → mock (aceita qualquer credencial).
+- `OPENPORT_MOCK!=true` + `OPENPORT_API_URL` real → chamada HTTP com timeout.
 
 ### Monorepo npm workspaces
 - `packages/shared` — tipos TypeScript compartilhados entre frontend e backend
-- `apps/frontend` e `apps/backend` — cada um com seu `package.json` e `tsconfig.json`
+- `ApiResponse<T>` é discriminated union (`success: true` → `data` garantido)
 
 ## API REST
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| `POST` | `/api/auth/openport` | Não | Autentica no OpenPort, retorna JWT |
+| `POST` | `/api/auth/openport` | Não (rate 10/min) | Autentica no OpenPort, retorna JWT |
 | `GET` | `/api/health` | Não | Health check |
 | `GET` | `/api/bots` | Não | Lista automações (público) |
 | `GET` | `/api/bots/:id` | Bearer JWT | Detalhes de um bot |
-| `POST` | `/api/bots/:id/execute` | Bearer JWT | Dispara execução (409 se já rodando) |
-| `GET` | `/api/bots/:id/stream` | Bearer JWT | SSE — logs ao vivo |
+| `GET` | `/api/bots/:id/stream` | Bearer JWT | SSE — dispara execução + logs ao vivo |
 
 ## Fluxo de Execução
 
 1. Usuário clica "Executar" no bot
-2. Modal pede login/senha do OpenPort
+2. Modal pede login/senha do OpenPort (com `<form>` nativo, Enter funciona)
 3. `POST /api/auth/openport` — retorna JWT
-4. `GET /api/bots/:id/stream` — backend verifica se bot já está rodando, cria registro de execução no banco e spawna `python scripts/<bot>/run.py`
-5. Python emite `{"level":"info","message":"..."}` no stdout
-6. Node.js captura cada linha, persiste no banco e envia como `data: {…}\n\n` via SSE
-7. LogDrawer no frontend renderiza cada entrada em tempo real
-8. Ao final, Python encerra com `emit_log("success", "✓ Rotina concluída")`
-9. Node.js emite `event: done` e fecha a conexão
+4. `GET /api/bots/:id/stream` — backend verifica se bot já está rodando, cria registro no banco, spawna `python scripts/<bot>/run.py`
+5. Python emite JSON lines no stdout
+6. Node.js captura, persiste no SQLite (com try/catch) e envia via SSE
+7. Frontend renderiza cada log em tempo real; trata eventos `done` e `error`
+8. Se cliente desconectar, processo Python é morto (`req.raw.on('close')`)
+9. Timeout configurável (`EXECUTION_TIMEOUT_MS`, padrão 30min)
 
-## Convenções de Código
+## Convenções
 
-- **Tamanho máximo de arquivo:** ~300 linhas. Arquivos maiores devem ser refatorados. Revisado em code review.
-- **TypeScript strict mode** habilitado em toda a codebase.
-- **Biome** para formatação e lint — sem ESLint ou Prettier.
-- **Importação:** módulos npm primeiro, depois internos, ordenados alfabeticamente.
-- **Componentes:** funções puras, sem classes. Props explicitamente tipadas com interface.
-- **Commits:** mensagens concisas em português, um commit por funcionalidade.
+- **Tamanho máximo de arquivo:** ~300 linhas.
+- **TypeScript strict mode** habilitado.
+- **Biome** para formatação e lint.
+- **Componentes:** funções puras, props com interface.
+- **Estilos:** Tailwind CSS + animações centralizadas em `globals.css`. Sem `<style>` inline.
 
 ## Como Rodar
 
@@ -148,7 +150,7 @@ npm run dev:backend   # Fastify :3001
 npm run dev:frontend  # Vite :5173 (proxy /api → :3001)
 
 # Testes
-npm run test -w apps/backend   # 11 testes E2E
+npm run test -w apps/backend   # 9 testes E2E
 npm run lint                   # Biome
 npm run typecheck              # tsc --noEmit
 
@@ -164,18 +166,18 @@ scripts/.venv/Scripts/pip install -r scripts/requirements.txt
 scripts/.venv/Scripts/python scripts/<bot>/run.py --bot-id x --openport-token y
 ```
 
-### Adicionar novo RPA
+## Adicionar novo RPA
 
 1. Copiar `scripts/__template__/` → `scripts/meu-rpa/`
-2. Implementar a lógica em `run()` usando `core.logger` e `core.openport_client`
-3. Adicionar ao `apps/backend/src/db/seed.ts`
+2. Implementar lógica em `run()` usando `core.logger`
+3. Adicionar ao array `SEED_BOTS` em `apps/backend/src/db/seed.ts`
 4. Executar: `npm run test -w apps/backend && npm run lint && npm run typecheck`
 
-## Próximos Passos (projetados)
+## Próximos Passos
 
-1. **Novos RPAs** — Adicionar automações reais seguindo o padrão `scripts/__template__/run.py`
-2. **Histórico** — Página de histórico de execuções com filtros (dados já estão no banco)
-3. **Integração OpenPort real** — Substituir mock `openport.ts` e `openport_client.py` por chamadas reais
-4. **Migrar SQLite → PostgreSQL** — Trocar driver Drizzle e rodar migrations
-5. **Agentes de IA** — Evoluir scripts Python para agentes com langchain/crewai
+1. **Novos RPAs** — Seguir o template `scripts/__template__/run.py`
+2. **Histórico** — Página `/historico` de execuções com filtros (dados já no banco)
+3. **Integração OpenPort real** — Remover `OPENPORT_MOCK`, apontar para API real
+4. **Migrar SQLite → PostgreSQL** — Trocar driver Drizzle, rodar migrations
+5. **Agentes de IA** — Evoluir scripts Python com langchain/crewai
 6. **Microserviço Python** — Extrair `scripts/` para FastAPI independente

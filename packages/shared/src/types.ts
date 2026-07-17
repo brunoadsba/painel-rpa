@@ -6,6 +6,7 @@ export interface Bot {
   description: string;
   lastRun: string | null;
   status: BotStatus;
+  scriptPath: string;
 }
 
 export interface Execution {
@@ -37,8 +38,6 @@ export interface AuthResponse {
   expiresAt: string;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+export type ApiResponse<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };

@@ -15,7 +15,7 @@ export function LogDrawer() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  });
+  }, [logs]);
 
   return (
     <div
@@ -44,8 +44,6 @@ export function LogDrawer() {
         ))}
         <div ref={bottomRef} />
       </div>
-
-      <style>{'@keyframes fadeIn { to { opacity: 1; } }'}</style>
     </div>
   );
 }

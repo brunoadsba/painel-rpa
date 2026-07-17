@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +14,10 @@ const EXECUTION_TIMEOUT_MS = Number(process.env.EXECUTION_TIMEOUT_MS) || 1_800_0
 
 const runningBots = new Set<string>();
 
+let _pythonPath: string | null = null;
+
 function findPython(): string {
+  if (_pythonPath) return _pythonPath;
   const candidates = [
     join(SCRIPTS_DIR, '.venv', 'Scripts', 'python.exe'),
     join(SCRIPTS_DIR, '.venv', 'Scripts', 'python'),
@@ -24,9 +28,13 @@ function findPython(): string {
   for (const cmd of candidates) {
     try {
       const result = spawnSync(cmd, ['--version'], { stdio: 'ignore', timeout: 2000 });
-      if (result.status === 0) return cmd;
+      if (result.status === 0) {
+        _pythonPath = cmd;
+        return cmd;
+      }
     } catch {}
   }
+  _pythonPath = 'python';
   return 'python';
 }
 
@@ -35,7 +43,7 @@ export function isBotRunning(botId: string): boolean {
 }
 
 export function executeBot(
-  bot: Bot & { scriptPath: string },
+  bot: Bot,
   onLog: (entry: LogEntry) => void,
   token?: string,
   triggeredBy?: string,
@@ -49,19 +57,25 @@ export function executeBot(
     throw new Error(`Bot "${bot.name}" já está em execução.`);
   }
 
-  const executionId = crypto.randomUUID();
+  const executionId = randomUUID();
   const now = new Date().toISOString();
 
-  db.insert(executions)
-    .values({
-      id: executionId,
-      botId: bot.id,
-      botName: bot.name,
-      status: 'running',
-      startedAt: now,
-      triggeredBy: triggeredBy ?? '',
-    })
-    .run();
+  try {
+    db.insert(executions)
+      .values({
+        id: executionId,
+        botId: bot.id,
+        botName: bot.name,
+        status: 'running',
+        startedAt: now,
+        triggeredBy: triggeredBy ?? '',
+      })
+      .run();
+  } catch (err) {
+    throw new Error(
+      `Falha ao registrar execução no banco: ${err instanceof Error ? err.message : 'erro desconhecido'}`,
+    );
+  }
 
   runningBots.add(bot.id);
 
@@ -87,16 +101,24 @@ export function executeBot(
   });
 
   const persistLog = (entry: LogEntry) => {
-    db.insert(logs)
-      .values({
-        id: entry.id,
-        executionId,
-        level: entry.level,
-        message: entry.message,
-        timestamp: entry.timestamp,
-      })
-      .run();
-    onLog(entry);
+    try {
+      db.insert(logs)
+        .values({
+          id: entry.id,
+          executionId,
+          level: entry.level,
+          message: entry.message,
+          timestamp: entry.timestamp,
+        })
+        .run();
+    } catch {
+      // DB write failure should not crash the execution stream
+    }
+    try {
+      onLog(entry);
+    } catch {
+      // SSE write failure (e.g. client disconnected) should not crash
+    }
   };
 
   const finishOnce = (status: 'done' | 'error', result: string) => {
@@ -104,11 +126,15 @@ export function executeBot(
     finished = true;
     if (timeout) clearTimeout(timeout);
     runningBots.delete(bot.id);
-    const finishedAt = new Date().toISOString();
-    db.update(executions)
-      .set({ status, finishedAt, result })
-      .where(eq(executions.id, executionId))
-      .run();
+    try {
+      const finishedAt = new Date().toISOString();
+      db.update(executions)
+        .set({ status, finishedAt, result })
+        .where(eq(executions.id, executionId))
+        .run();
+    } catch {
+      // DB update failure should not crash the process
+    }
   };
 
   timeout = setTimeout(() => {
@@ -131,12 +157,12 @@ export function executeBot(
         const parsed = JSON.parse(trimmed) as LogEntry;
         persistLog({
           ...parsed,
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           executionId,
         });
       } catch {
         persistLog({
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           executionId,
           timestamp: new Date().toISOString(),
           level: 'info',
@@ -147,13 +173,18 @@ export function executeBot(
   });
 
   proc.stderr.on('data', (chunk: Buffer) => {
-    persistLog({
-      id: crypto.randomUUID(),
-      executionId,
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      message: chunk.toString().trim(),
-    });
+    const text = chunk.toString();
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      persistLog({
+        id: randomUUID(),
+        executionId,
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        message: trimmed,
+      });
+    }
   });
 
   proc.on('close', (code) => {
@@ -161,7 +192,7 @@ export function executeBot(
     const finishedAt = new Date().toISOString();
     if (code === 0) {
       const entry: LogEntry = {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         executionId,
         timestamp: finishedAt,
         level: 'success',
@@ -172,7 +203,7 @@ export function executeBot(
       resolvePromise(executionId);
     } else {
       const entry: LogEntry = {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         executionId,
         timestamp: finishedAt,
         level: 'error',
@@ -188,7 +219,7 @@ export function executeBot(
     if (finished) return;
     const timestamp = new Date().toISOString();
     const entry: LogEntry = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       executionId,
       timestamp,
       level: 'error',

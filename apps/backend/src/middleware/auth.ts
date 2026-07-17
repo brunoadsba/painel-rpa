@@ -1,8 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { JwtPayload } from 'jsonwebtoken';
 import { verifyToken } from '../lib/jwt.js';
 
 export interface AuthenticatedRequest extends FastifyRequest {
-  user?: Record<string, unknown>;
+  user: JwtPayload;
 }
 
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply) {

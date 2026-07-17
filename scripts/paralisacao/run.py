@@ -32,7 +32,7 @@ os.environ["PRIMEIRO_PLANO"] = "false"
 # RPAs baseados em API devem usar openport_client.py com este token.
 parser = argparse.ArgumentParser()
 parser.add_argument("--bot-id", required=True)
-parser.add_argument("--openport-token", required=True)
+parser.add_argument("--openport-token", default="")
 parser.add_argument("--triggered-by", default="")
 args, _ = parser.parse_known_args()
 execution_id = args.bot_id

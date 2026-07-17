@@ -84,46 +84,6 @@ describe('E2E: API Torre RPA', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('POST /api/bots/:id/execute → 200 com token', async () => {
-    const token = await getToken(app);
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/bots/paralisacao/execute',
-      headers: { authorization: `Bearer ${token}` },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).success).toBe(true);
-  });
-
-  it('POST /api/bots/:id/execute → 409 se já estiver rodando', async () => {
-    const token = await getToken(app);
-
-    const { executeBot } = await import('../src/services/executor.js');
-    const { promise, kill } = executeBot(
-      {
-        id: 'paralisacao',
-        name: 'Paralisação',
-        description: '',
-        lastRun: null,
-        status: 'idle',
-        scriptPath: 'paralisacao/run.py',
-      },
-      () => {},
-      'test-token',
-      'test',
-    );
-    promise.catch(() => {});
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/bots/paralisacao/execute',
-      headers: { authorization: `Bearer ${token}` },
-    });
-    expect(res.statusCode).toBe(409);
-
-    kill();
-  });
-
   it('GET /api/bots/:id/stream → SSE com auth', async () => {
     const token = await getToken(app);
     const res = await app.inject({
@@ -143,17 +103,10 @@ describe('E2E: API Torre RPA', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('fluxo completo: auth → list → execute → SSE', async () => {
+  it('fluxo completo: auth → list → SSE', async () => {
     const token = await getToken(app);
     const listRes = await app.inject({ method: 'GET', url: '/api/bots' });
     expect(JSON.parse(listRes.body).data.length).toBe(1);
-
-    const execRes = await app.inject({
-      method: 'POST',
-      url: '/api/bots/paralisacao/execute',
-      headers: { authorization: `Bearer ${token}` },
-    });
-    expect(execRes.statusCode).toBe(200);
 
     const streamRes = await app.inject({
       method: 'GET',

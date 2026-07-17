@@ -1,9 +1,11 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
 class LogEntry(BaseModel):
     execution_id: str
-    level: str  # info | success | warn | error
+    level: Literal["info", "success", "warn", "error"]
     message: str
     timestamp: str | None = None
 

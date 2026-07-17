@@ -14,7 +14,11 @@ export async function botsRoutes(app: FastifyInstance) {
     '/:id',
     { preHandler: [authMiddleware] },
     async (request, reply) => {
-      const bot = db.select().from(bots).where(eq(bots.id, request.params.id)).get();
+      const { id } = request.params;
+      if (!id || typeof id !== 'string' || id.trim() === '') {
+        return reply.status(400).send({ success: false, error: 'ID do bot inválido' });
+      }
+      const bot = db.select().from(bots).where(eq(bots.id, id)).get();
       if (!bot) {
         return reply.status(404).send({ success: false, error: 'Bot não encontrado' });
       }

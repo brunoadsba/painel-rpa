@@ -43,7 +43,7 @@ npm run dev:backend   # Backend :3001
 npm run dev:frontend  # Frontend :5173
 
 # 6. Testes
-npm run test -w apps/backend   # 11 testes E2E
+npm run test -w apps/backend   # 9 testes E2E
 npm run lint                   # Biome
 npm run typecheck              # TypeScript
 ```
@@ -66,17 +66,28 @@ scripts/
 
 | Rota | Descrição |
 |---|---|
-| `POST /api/auth/openport` | Autentica no OpenPort |
-| `GET /api/bots` | Lista automações |
-| `GET /api/bots/:id/stream` | SSE — logs ao vivo da execução |
+| `POST /api/auth/openport` | Autentica no OpenPort (rate: 10/min) |
+| `GET /api/bots` | Lista automações (público) |
+| `GET /api/bots/:id` | Detalhes de um bot (JWT) |
+| `GET /api/bots/:id/stream` | SSE — dispara execução + logs ao vivo (JWT) |
 | `GET /api/health` | Health check |
 
 ## Fluxo
 
-1. Clique em "Executar" → modal pede credenciais OpenPort
-2. `POST /api/auth/openport` → retorna JWT
-3. `GET /api/bots/:id/stream` → Node.js spawna Python
-4. Python executa e emite logs via stdout → SSE → LogDrawer no frontend
+1. Clique em "Executar" → `<form>` nativo pede credenciais OpenPort
+2. `POST /api/auth/openport` → retorna JWT (rate: 10/min)
+3. `GET /api/bots/:id/stream` → Node.js spawna Python com timeout
+4. Python executa e emite JSON lines via stdout → SSE → LogDrawer no frontend
+5. Logs persistem no SQLite em tempo real
+6. Cliente desconecta → processo filho é morto automaticamente
+
+## Segurança
+
+- `JWT_SECRET` obrigatório (sem fallback), algoritmo HS256 explícito
+- Rate limiting: 10 req/min na auth, 100 req/min global
+- Fetch OpenPort com timeout 15s (AbortController)
+- Graceful shutdown: SIGTERM/SIGINT fecha server + DB
+- `:id` validado em todas as rotas (rejeita vazio/null)
 
 ## Docker
 

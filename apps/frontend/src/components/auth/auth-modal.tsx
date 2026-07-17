@@ -21,7 +21,8 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
 
   if (!selectedBot) return null;
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setError('');
     setLoading(true);
     try {
@@ -52,35 +53,37 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
         </div>
       )}
 
-      <Input
-        label="Usuário"
-        type="text"
-        placeholder="usuario.openport"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        autoFocus
-      />
-      <Input
-        label="Senha"
-        type="password"
-        placeholder="••••••••"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+      <form onSubmit={handleSubmit}>
+        <Input
+          label="Usuário"
+          type="text"
+          placeholder="usuario.openport"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoFocus
+        />
+        <Input
+          label="Senha"
+          type="password"
+          placeholder="••••••••"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-      <div className="flex gap-2.5 mt-5">
-        <Button variant="secondary" className="flex-1" onClick={closeModal}>
-          Cancelar
-        </Button>
-        <Button
-          variant="primary"
-          className="flex-[1.4]"
-          onClick={handleSubmit}
-          disabled={loading || !username || !password}
-        >
-          {loading ? 'Autenticando…' : 'Autenticar e Executar'}
-        </Button>
-      </div>
+        <div className="flex gap-2.5 mt-5">
+          <Button variant="secondary" className="flex-1" onClick={closeModal}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            className="flex-[1.4]"
+            type="submit"
+            disabled={loading || !username || !password}
+          >
+            {loading ? 'Autenticando…' : 'Autenticar e Executar'}
+          </Button>
+        </div>
+      </form>
     </Modal>
   );
 }

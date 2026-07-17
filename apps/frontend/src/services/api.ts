@@ -1,14 +1,7 @@
 import type { ApiResponse } from '@torre-rpa/shared';
+import { getToken } from '../lib/auth-token';
 
 const BASE_URL = '/api';
-
-function getToken(): string | null {
-  try {
-    const stored = localStorage.getItem('auth');
-    if (stored) return JSON.parse(stored).token;
-  } catch {}
-  return null;
-}
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
@@ -26,5 +19,5 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     throw new Error(json.error || 'Erro desconhecido');
   }
 
-  return json.data as T;
+  return json.data;
 }

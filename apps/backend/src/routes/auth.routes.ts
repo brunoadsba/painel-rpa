@@ -9,12 +9,12 @@ const authSchema = z.object({
 });
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post('/openport', async (request, reply) => {
+  app.post('/openport', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = authSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
         success: false,
-        error: parsed.error.errors[0].message,
+        error: parsed.error.errors.map((e) => e.message).join('; '),
       });
     }
 

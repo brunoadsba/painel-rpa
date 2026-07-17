@@ -27,11 +27,19 @@ function clearStorage() {
 }
 
 const initial = loadFromStorage();
+const isTokenValid = (): boolean => {
+  if (!initial.token || !initial.expiresAt) return false;
+  try {
+    return new Date(initial.expiresAt).getTime() > Date.now();
+  } catch {
+    return false;
+  }
+};
 
 export const useAuthStore = create<AuthState>((set) => ({
   token: initial.token,
   expiresAt: initial.expiresAt,
-  isAuthenticated: !!initial.token,
+  isAuthenticated: isTokenValid(),
   setAuth: (token, expiresAt) => {
     saveToStorage(token, expiresAt);
     set({ token, expiresAt, isAuthenticated: true });

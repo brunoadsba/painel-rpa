@@ -8,7 +8,7 @@ function formatLastRun(iso: string | null): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / 86400000);
-  const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
   if (diffDays === 0) return `Hoje ${time}`;
   if (diffDays === 1) return `Ontem ${time}`;
