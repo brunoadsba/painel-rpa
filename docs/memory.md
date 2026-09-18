@@ -188,6 +188,12 @@ Branch: `feat/hub-ux-clean`. Decisão sênior: estabilizar base antes de expandi
 - `server.ts`: fail-fast se `JWT_SECRET` ausente/default/curto (<32 chars); recusa `OPENPORT_MOCK=true` com `NODE_ENV=production`; warn em UAT.
 - Visão Hub: Torre RPA = aplicação web central com todos os RPAs inseridos/configurados. Ver `docs/hub-roadmap.md` (catálogo dinâmico → params por RPA → histórico/agendamento → multi-instância) e `docs/frontend-ux-plan.md` (redesign clean).
 
+## Atualização 2026-09-18 — UX clean + testes
+
+- Frontend clean (Fases 1–3 do plano): tokens `muted/muted-2` definidos, foco visível, `BotCard` + grid responsiva, busca + filtros por status, skeletons/empty-states, header sem sweep, drawer 480px com `aria-live` e stick-to-bottom, `fieldset/legend` no filtro. `bot-row.tsx` mantido como morto para remoção no cleanup.
+- Testes: `npm install` (npmmirror) ok; `lint:check` + `typecheck` verdes. E2E backend 10/11 — falha restante `stream SSE` (timeout 5s, spawna RPA Playwright real, ambiental). Fixes de testabilidade: `mkdir -p` do dir SQLite em `db/index.ts`; guard `JWT_SECRET` relaxado sob `VITEST/NODE_ENV=test`.
+- `package-lock.json` revertido (npm 11 remove flags `peer:true`, ruído — sem mudança de deps).
+
 ## Próximos Passos
 
 1. **Novos RPAs** — Seguir o template `scripts/__template__/run.py`

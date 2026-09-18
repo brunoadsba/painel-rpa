@@ -16,14 +16,27 @@
       radial-gradient(circle at 90% 0%, rgba(0, 24, 88, 0.55), transparent 45%);
   }
 
-  @keyframes sweep {
-    to {
-      transform: translateY(-50%) rotate(360deg);
-    }
+  :focus-visible {
+    outline: 2px solid #3aa6a6;
+    outline-offset: 2px;
   }
 
-  .animate-sweep {
-    animation: sweep 6s linear infinite;
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 
   @keyframes fadeIn {

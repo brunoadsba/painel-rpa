@@ -49,10 +49,10 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
 
   return (
     <Modal open={isModalOpen} onClose={handleClose}>
-      <div className="font-mono text-[10px] tracking-widest text-amber uppercase mb-2">
+      <p className="font-body text-[11px] font-semibold tracking-wide text-amber uppercase mb-2">
         Autenticação OpenPort
-      </div>
-      <h3 className="font-display text-lg mb-1">Executar: {selectedBot.name}</h3>
+      </p>
+      <h3 className="font-display text-lg text-white mb-1">Executar: {selectedBot.name}</h3>
       <p className="font-body text-[12.5px] text-muted mb-5">
         Informe as credenciais compartilhadas do OpenPort para disparar esta automação.
       </p>

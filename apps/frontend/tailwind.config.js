@@ -11,6 +11,9 @@ export default {
           700: '#0C2570',
           600: '#1B3486',
         },
+        muted: '#8A94B0',
+        'muted-2': '#5A6584',
+        surface: 'rgba(255,255,255,0.04)',
         teal: {
           DEFAULT: '#3AA6A6',
           light: '#8FDCD6',
