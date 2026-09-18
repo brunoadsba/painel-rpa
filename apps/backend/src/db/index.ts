@@ -1,6 +1,6 @@
+import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync } from 'node:fs';
 import type { Database } from 'better-sqlite3';
 import DatabaseConstructor from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';

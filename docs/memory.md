@@ -194,6 +194,13 @@ Branch: `feat/hub-ux-clean`. Decisão sênior: estabilizar base antes de expandi
 - Testes: `npm install` (npmmirror) ok; `lint:check` + `typecheck` verdes. E2E backend 10/11 — falha restante `stream SSE` (timeout 5s, spawna RPA Playwright real, ambiental). Fixes de testabilidade: `mkdir -p` do dir SQLite em `db/index.ts`; guard `JWT_SECRET` relaxado sob `VITEST/NODE_ENV=test`.
 - `package-lock.json` revertido (npm 11 remove flags `peer:true`, ruído — sem mudança de deps).
 
+## Atualização 2026-09-18 — SEV Intermarítima (carro-chefe, vitrine)
+
+- Contexto: `Automacao_SEV.exe` é produto Windows on-premise no cliente (GUI, PyInstaller ~594MB, builds QAS/PROD v1.0.0). Cliente não acessa a Torre; update via zip; sem agente (GUI-only não permite orquestração remota).
+- Modelo: Torre = vitrine + operação interna. `seed.ts` com 2 bots (`sev-intermaritima ★` + `paralisacao`); stub `scripts/sev/run.py` emite JSON-lines no contrato SSE (check Hub, sem .exe); `scripts/sev/versions.json` com versões/manual (binário fora do git, `sha256` a preencher).
+- Frontend: banner ★ no dashboard → rota `/sev` (`SevProduct`: versões, manual, aviso release privada). Build ok.
+- Validação: lint + typecheck verdes; E2E backend 10/11 (mesmo SSE ambiental). Teste `GET /api/bots → 1 bot` com nome desatualizado (agora 2) — renomear.
+
 ## Próximos Passos
 
 1. **Novos RPAs** — Seguir o template `scripts/__template__/run.py`

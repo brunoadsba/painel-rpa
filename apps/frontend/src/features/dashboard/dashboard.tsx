@@ -1,5 +1,6 @@
 import type { AuthCredentials, Bot, BotStatus } from '@torre-rpa/shared';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AuthModal } from '../../components/auth/auth-modal';
 import { BotList } from '../../components/dashboard/bot-list';
 import { LogDrawer } from '../../components/log/log-drawer';
@@ -47,6 +48,24 @@ export function Dashboard() {
 
   return (
     <>
+      {(bots ?? []).some((b) => b.id === 'sev-intermaritima') && (
+        <Link
+          to="/sev"
+          className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-teal/30 bg-gradient-to-r from-teal/15 to-transparent px-5 py-4 transition-colors hover:border-teal/50"
+        >
+          <div>
+            <p className="font-body text-[11px] font-bold tracking-widest text-teal-light">
+              ★ CARRO-CHEFE
+            </p>
+            <p className="font-display text-[16px] font-bold text-white">
+              SEV Intermarítima — ver produto, versões e manual
+            </p>
+          </div>
+          <span aria-hidden="true" className="text-xl text-teal-light">
+            →
+          </span>
+        </Link>
+      )}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-display text-[22px] font-bold text-white">Automações</h2>

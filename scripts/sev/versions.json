@@ -1,0 +1,28 @@
+{
+  "produto": "Automação SEV — Intermarítima (TOS OpenPort CODEBA Ilhéus)",
+  "execucao": "Manual no Windows do cliente (GUI). Binário fora do git.",
+  "artefatos": "Releases privadas (link assinado) + SHA256. WhatsApp só avisa.",
+  "versions": [
+    {
+      "versao": "v1.0.0",
+      "ambiente": "QAS",
+      "arquivo": "Automacao_SEV_QAS_v1.0.0.zip",
+      "sha256": "PREENCHER",
+      "notas": "Build de homologação. Seletores com fallback, erros bloqueantes vs retry."
+    },
+    {
+      "versao": "v1.0.0",
+      "ambiente": "PRODUCAO",
+      "arquivo": "Automacao_SEV_PRODUCAO_v1.0.0.zip",
+      "sha256": "PREENCHER",
+      "notas": "Build de produção. Mesma base QAS, config de ambiente separada."
+    }
+  ],
+  "manual": [
+    "Extrair o zip do ambiente correto numa pasta dedicada.",
+    "Executar Automacao_SEV.exe no Windows com sessão aberta.",
+    "Login OpenPort → menu 9401 → nova SEV → motivo EGS → INTERMARITIMA → transportadora → condutor → placas.",
+    "Confirmar 'Operação Realizada com Sucesso / SEV Enviada / Autorizada'.",
+    "Lançar o resultado manualmente no Hub (data, cliente, SEVs, erros)."
+  ]
+}
