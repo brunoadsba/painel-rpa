@@ -10,6 +10,22 @@ import { resetOrphanBots } from './services/executor.js';
 
 initDatabase();
 
+// Fail-fast de segredos — impede subir com default em prod
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret || jwtSecret === 'change-me-in-production' || jwtSecret.length < 32) {
+  console.error(
+    '[Boot] JWT_SECRET ausente, default ou fraco (<32 chars). Gere com: openssl rand -base64 32',
+  );
+  process.exit(1);
+}
+if (process.env.OPENPORT_MOCK === 'true' && process.env.NODE_ENV === 'production') {
+  console.error('[Boot] OPENPORT_MOCK=true com NODE_ENV=production — recuse subir para evitar auth fake em prod.');
+  process.exit(1);
+}
+if (process.env.OPENPORT_MOCK === 'true') {
+  console.warn('[Boot] OPENPORT_MOCK=true — autenticação fake ativa (ok apenas para UAT local).');
+}
+
 // Resetar bots órfãos presos em 'running' após crash/reinício
 const resetCount = resetOrphanBots();
 if (resetCount > 0) {

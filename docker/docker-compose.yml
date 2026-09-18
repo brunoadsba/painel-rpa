@@ -1,17 +1,4 @@
-version: "3.9"
-
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: rpa
-      POSTGRES_PASSWORD: rpa
-      POSTGRES_DB: torre_rpa
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
   backend:
     build:
       context: ..
@@ -20,10 +7,17 @@ services:
       - "3001:3001"
     environment:
       BACKEND_PORT: 3001
-      DATABASE_URL: postgres://rpa:rpa@postgres:5432/torre_rpa
-      JWT_SECRET: change-me-in-production
-    depends_on:
-      - postgres
+      # SQLite em volume persistente (backend atual usa better-sqlite3, não postgres)
+      DATABASE_PATH: /data/torre-rpa.db
+      SCRIPTS_DIR: /app/scripts
+      EXECUTION_TIMEOUT_MS: 1800000
+      # Obrigatório — sem fallback. Gere com: openssl rand -base64 32
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET é obrigatório — defina no .env}
+      OPENPORT_MOCK: ${OPENPORT_MOCK:-false}
+      OPENPORT_API_URL: ${OPENPORT_API_URL:-}
+    volumes:
+      - torre-data:/data
+    restart: unless-stopped
 
   frontend:
     build:
@@ -33,6 +27,7 @@ services:
       - "5173:80"
     depends_on:
       - backend
+    restart: unless-stopped
 
 volumes:
-  pgdata:
+  torre-data:

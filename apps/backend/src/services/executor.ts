@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Bot, LogEntry } from '@torre-rpa/shared';
 import { eq } from 'drizzle-orm';
@@ -9,7 +9,9 @@ import { db } from '../db/index.js';
 import { bots, executions, logs } from '../db/schema.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCRIPTS_DIR = join(__dirname, '..', '..', '..', '..', 'scripts');
+// Permite override via env no Docker (SCRIPTS_DIR=/app/scripts).
+// Fallback mantém compat com dev (repo-root/scripts).
+const SCRIPTS_DIR = process.env.SCRIPTS_DIR || join(__dirname, '..', '..', '..', '..', 'scripts');
 const EXECUTION_TIMEOUT_MS = Number(process.env.EXECUTION_TIMEOUT_MS) || 1_800_000;
 
 const runningBots = new Set<string>();
@@ -19,12 +21,14 @@ let _pythonPath: string | null = null;
 function findPython(): string {
   if (_pythonPath) return _pythonPath;
   const candidates = [
+    process.env.PYTHON_PATH || '',
+    join(SCRIPTS_DIR, '.venv', 'bin', 'python'),
     join(SCRIPTS_DIR, '.venv', 'Scripts', 'python.exe'),
     join(SCRIPTS_DIR, '.venv', 'Scripts', 'python'),
+    'python3',
     'python',
     'py',
-    'python3',
-  ];
+  ].filter(Boolean);
   for (const cmd of candidates) {
     try {
       const result = spawnSync(cmd, ['--version'], { stdio: 'ignore', timeout: 2000 });
@@ -55,7 +59,11 @@ export function executeBot(
   onLog: (entry: LogEntry) => void,
   options: ExecuteBotOptions,
 ): { promise: Promise<string>; kill: () => void } {
-  const botScript = join(SCRIPTS_DIR, bot.scriptPath);
+  // Guard anti path-traversal: scriptPath deve resolver dentro de SCRIPTS_DIR
+  const botScript = resolve(SCRIPTS_DIR, bot.scriptPath);
+  if (botScript !== SCRIPTS_DIR && !botScript.startsWith(SCRIPTS_DIR + sep)) {
+    throw new Error(`scriptPath inválido (fora de scripts/): ${bot.scriptPath}`);
+  }
   if (!existsSync(botScript)) {
     throw new Error(`Script não encontrado: ${botScript}`);
   }

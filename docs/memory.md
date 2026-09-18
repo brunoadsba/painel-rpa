@@ -178,6 +178,16 @@ scripts/.venv/Scripts/python scripts/<bot>/run.py --bot-id x --openport-token y
 3. Adicionar ao array `SEED_BOTS` em `apps/backend/src/db/seed.ts`
 4. Executar: `npm run test -w apps/backend && npm run lint && npm run typecheck`
 
+## Atualização 2026-09-18 — Base estável + visão Hub
+
+Branch: `feat/hub-ux-clean`. Decisão sênior: estabilizar base antes de expandir Hub.
+
+- `docker/Dockerfile.backend`: imagem única Node 22 bookworm-slim + Python3 + Chromium (Playwright). Copia `scripts/` para a imagem, `SCRIPTS_DIR=/app/scripts`, `DATABASE_PATH=/data`, volume `torre-data`. Antes o spawn Python falharia em prod.
+- `executor.ts`: `SCRIPTS_DIR` via env com fallback dev; guard anti path-traversal (`resolve` + prefix check rejeita `../`); `findPython()` com `.venv/bin/python` (Linux) + `PYTHON_PATH`.
+- `docker-compose.yml`: removido `postgres` fantasma (backend usa SQLite better-sqlite3); volume persistente; `JWT_SECRET` obrigatório via `${JWT_SECRET:?}`; `OPENPORT_MOCK` default `false`.
+- `server.ts`: fail-fast se `JWT_SECRET` ausente/default/curto (<32 chars); recusa `OPENPORT_MOCK=true` com `NODE_ENV=production`; warn em UAT.
+- Visão Hub: Torre RPA = aplicação web central com todos os RPAs inseridos/configurados. Ver `docs/hub-roadmap.md` (catálogo dinâmico → params por RPA → histórico/agendamento → multi-instância) e `docs/frontend-ux-plan.md` (redesign clean).
+
 ## Próximos Passos
 
 1. **Novos RPAs** — Seguir o template `scripts/__template__/run.py`
