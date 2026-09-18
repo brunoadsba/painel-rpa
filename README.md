@@ -2,6 +2,8 @@
 
 Painel web para centralizar, autenticar e executar automações RPA do Porto de Ilhéus.
 
+> **Usuário?** Comece pelo [Guia do Usuário](docs/guia-usuario.md) — linguagem simples, passo a passo.
+
 ![stack](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![stack](https://img.shields.io/badge/Fastify-5-000000?logo=fastify)
 ![stack](https://img.shields.io/badge/Python-3.12-3776AB?logo=python)

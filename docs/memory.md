@@ -201,6 +201,11 @@ Branch: `feat/hub-ux-clean`. Decisão sênior: estabilizar base antes de expandi
 - Frontend: banner ★ no dashboard → rota `/sev` (`SevProduct`: versões, manual, aviso release privada). Build ok.
 - Validação: lint + typecheck verdes; E2E backend 10/11 (mesmo SSE ambiental). Teste `GET /api/bots → 1 bot` com nome desatualizado (agora 2) — renomear.
 
+## Atualização 2026-09-18 — Guia do usuário + README
+
+- Criado `docs/guia-usuario.md`: linguagem simples para leigos (o que é, como entrar, tela inicial, passo a passo de execução, página SEV, tabela de erros, FAQ, glossário).
+- `README.md` (já existia): adicionada chamada para o guia no topo.
+
 ## Próximos Passos
 
 1. **Novos RPAs** — Seguir o template `scripts/__template__/run.py`
