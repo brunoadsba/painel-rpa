@@ -178,6 +178,29 @@ scripts/.venv/Scripts/python scripts/<bot>/run.py --bot-id x --openport-token y
 3. Adicionar ao array `SEED_BOTS` em `apps/backend/src/db/seed.ts`
 4. Executar: `npm run test -w apps/backend && npm run lint && npm run typecheck`
 
+## Atualização 2026-09-18 — Base estável + visão Hub
+
+Branch: `feat/hub-ux-clean`. Decisão sênior: estabilizar base antes de expandir Hub.
+
+- `docker/Dockerfile.backend`: imagem única Node 22 bookworm-slim + Python3 + Chromium (Playwright). Copia `scripts/` para a imagem, `SCRIPTS_DIR=/app/scripts`, `DATABASE_PATH=/data`, volume `torre-data`. Antes o spawn Python falharia em prod.
+- `executor.ts`: `SCRIPTS_DIR` via env com fallback dev; guard anti path-traversal (`resolve` + prefix check rejeita `../`); `findPython()` com `.venv/bin/python` (Linux) + `PYTHON_PATH`.
+- `docker-compose.yml`: removido `postgres` fantasma (backend usa SQLite better-sqlite3); volume persistente; `JWT_SECRET` obrigatório via `${JWT_SECRET:?}`; `OPENPORT_MOCK` default `false`.
+- `server.ts`: fail-fast se `JWT_SECRET` ausente/default/curto (<32 chars); recusa `OPENPORT_MOCK=true` com `NODE_ENV=production`; warn em UAT.
+- Visão Hub: Torre RPA = aplicação web central com todos os RPAs inseridos/configurados. Ver `docs/hub-roadmap.md` (catálogo dinâmico → params por RPA → histórico/agendamento → multi-instância) e `docs/frontend-ux-plan.md` (redesign clean).
+
+## Atualização 2026-09-18 — UX clean + testes
+
+- Frontend clean (Fases 1–3 do plano): tokens `muted/muted-2` definidos, foco visível, `BotCard` + grid responsiva, busca + filtros por status, skeletons/empty-states, header sem sweep, drawer 480px com `aria-live` e stick-to-bottom, `fieldset/legend` no filtro. `bot-row.tsx` mantido como morto para remoção no cleanup.
+- Testes: `npm install` (npmmirror) ok; `lint:check` + `typecheck` verdes. E2E backend 10/11 — falha restante `stream SSE` (timeout 5s, spawna RPA Playwright real, ambiental). Fixes de testabilidade: `mkdir -p` do dir SQLite em `db/index.ts`; guard `JWT_SECRET` relaxado sob `VITEST/NODE_ENV=test`.
+- `package-lock.json` revertido (npm 11 remove flags `peer:true`, ruído — sem mudança de deps).
+
+## Atualização 2026-09-18 — SEV Intermarítima (carro-chefe, vitrine)
+
+- Contexto: `Automacao_SEV.exe` é produto Windows on-premise no cliente (GUI, PyInstaller ~594MB, builds QAS/PROD v1.0.0). Cliente não acessa a Torre; update via zip; sem agente (GUI-only não permite orquestração remota).
+- Modelo: Torre = vitrine + operação interna. `seed.ts` com 2 bots (`sev-intermaritima ★` + `paralisacao`); stub `scripts/sev/run.py` emite JSON-lines no contrato SSE (check Hub, sem .exe); `scripts/sev/versions.json` com versões/manual (binário fora do git, `sha256` a preencher).
+- Frontend: banner ★ no dashboard → rota `/sev` (`SevProduct`: versões, manual, aviso release privada). Build ok.
+- Validação: lint + typecheck verdes; E2E backend 10/11 (mesmo SSE ambiental). Teste `GET /api/bots → 1 bot` com nome desatualizado (agora 2) — renomear.
+
 ## Próximos Passos
 
 1. **Novos RPAs** — Seguir o template `scripts/__template__/run.py`

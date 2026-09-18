@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Database } from 'better-sqlite3';
@@ -10,6 +11,7 @@ import { SEED_BOTS } from './seed.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_PATH = process.env.DATABASE_PATH || join(__dirname, '..', '..', 'data', 'torre-rpa.db');
 
+mkdirSync(dirname(DB_PATH), { recursive: true });
 const sqlite: Database = new DatabaseConstructor(DB_PATH);
 sqlite.pragma('journal_mode = WAL');
 sqlite.pragma('foreign_keys = ON');
